@@ -165,21 +165,10 @@ def blowjob( rfid, seconds ):
                     stamp[ rfid ]     = int(datetime.timestamp( datetime.now() )) + seconds + random.randint(10, 120)
                     realstamp[ rfid ] = int(datetime.timestamp( datetime.now() )) + seconds
 
-                    if device['protocol'] == "http":
-                        url = "http://"+device['ip']+"/"+i['call']+"?Seconds="+str(seconds)
-                        with urlopen( url ) as conn:
-                            resp = conn
-                    elif device['protocol'] == "https":
-                        url = "https://"+device['ip']+"/"+i['call']+"?Seconds="+str(seconds)
-                        with urlopen( url ) as conn:
-                            resp = conn
-                    elif device['protocol'] == "433":
-                        code = device['ip']+str(seconds)
-                        rfsend.tx_code(int(code), 1, 350, 32)
-
+                    if device['protocol'] == "MQTT":
+                        punmqtt.publish('punisher/functions/blowjob', str(seconds)+',60' )
                     if i['image'] != "":
                         showfunc( i['image'] )
-
 
 def painplay( rfid ):
     global stamp, slaves
