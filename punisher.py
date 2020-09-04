@@ -45,6 +45,8 @@ rfdevice.enable_rx()
 rfsend.enable_tx()
 rfdevice.tx_repeat = 10
 timestamp = None
+old_slave_count = -1
+old_device_count = -1
 logger = logging.getLogger( 'Punisher' )
 logger.setLevel( logging.DEBUG )
 log = logging.FileHandler('logs/punisher.log')
@@ -90,11 +92,15 @@ def listToString(s):
     return str1  
 
 def defaultLCD():
-    global tordevices
-    if slaves.count_slaves() == 0:
-        showLCD('BDSM Trainer', str(tordevices.count_devices())+' Devices found')
-    else:
-        showLCD(str(slaves.count_slaves())+' Slave avail.', str(tordevices.count_devices())+' Devices found')
+    global tordevices, old_slave_count, old_device_count
+
+    if old_slave_count != slaves.count_slaves() or old_device_count != tordevices.count_devices():
+        if slaves.count_slaves() == 0:
+            showLCD('BDSM Trainer', str(tordevices.count_devices())+' Devices found')
+        else:
+            showLCD(str(slaves.count_slaves())+' Slave avail.', str(tordevices.count_devices())+' Devices found')
+        old_slave_count = slaves.count_slaves()
+        old_device_count = tordevices.count_devices()
 
 def shock( rfid, mode ):
     global stamp, realstamp, punmqtt
@@ -166,7 +172,7 @@ def blowjob( rfid, seconds ):
                     realstamp[ rfid ] = int(datetime.timestamp( datetime.now() )) + seconds
 
                     if device['protocol'] == "MQTT":
-                        punmqtt.publish('punisher/functions/blowjob', str(seconds)+',60' )
+                        punmqtt.publish('punisher/functions/blowjob', str(seconds)+',10' )
                     if i['image'] != "":
                         showfunc( i['image'] )
 
@@ -205,30 +211,6 @@ def program():
         else:
             logger.warning('Slave has no training program')
 
-def r433():
-# Codebased = 99011110
-# 99 = fixed
-# 01 = device01 // 02 = device02 // 03 = device03 // 00 = this device
-# 1  = punish
-# 1  = tens
-# 10 = seconds
-
-    global timestamp
-    if rfdevice.rx_code_timestamp != timestamp:
-        timestamp = rfdevice.rx_code_timestamp
-        response = str(rfdevice.rx_code)
-        valid  = response[0]+response[1]
-        if valid == "99":
-            if len(response) != 6:
-                device = "torturedevice"+response[2]+response[3]
-                function = response[4]
-                args = response[5]
-                seconds = int(response[6]+response[7])
-                slave = slaves.which( device )
-                if slave != "":
-                    if function == "1":
-                        shock_punish( slave, seconds )
-
 def rfid():
     (status,TagType) = MIFAREReader.MFRC522_Request(MIFAREReader.PICC_REQIDL)
     if status == MIFAREReader.MI_OK:
@@ -253,6 +235,14 @@ def rfid():
             else:
                 if slaves.slave_online( slave[1] ):
                     logger.debug( "Slave '"+slave[2]+"'  disconnected - RFID "+slaveid )
+                    devices = slaves.get_device( slave[1] )
+
+                    for dev in devices:
+                        device = tordevices.get_device( dev['device'] )
+
+                        if device['protocol'] == "MQTT":
+                            punmqtt.publish("punisher/devices/"+dev['device']+"/settings", "{\"slave_id\": 0, \"slave_name\": \""+slave[2]+"\"} ");
+
                     slaves.remove_slave( slave[1] )
                     showLCD(slave[2], 'Slave disconnected')
                     sleep(2)
@@ -269,6 +259,7 @@ def rfid():
                     for dev in device:
                         if tordevices.device_online( dev[4] ):
                             slaves.add_device( slave[1], slave[2], dev[4] )
+                            punmqtt.publish("punisher/devices/"+dev[4]+"/settings", "{\"slave_id\": "+str(slave[0])+", \"slave_name\": \""+slave[2]+"\"} ");
 
                     showLCD(slave[2], 'Slave connected')
                     sleep(2)
@@ -306,22 +297,8 @@ cursor.execute('SELECT * FROM devices, torfunctions WHERE tf_devid = dev_id')
 devices = cursor.fetchall()
 
 for device in devices:
-    if device[3] == "433":
-        code = device[2]+str("000");
-        rfsend.tx_code(int(code), 1, 350, 32)
-        timeout = int(datetime.timestamp( datetime.now() )) + 10
-        time.sleep(1)
-        while True:
-            if rfdevice.rx_code_timestamp != timestamp:
-                timestamp = rfdevice.rx_code_timestamp
-                response = str(rfdevice.rx_code);
-                if response == "99"+str(device[2][2])+str(device[2][3])+"00":
-                    tordevices.add_device( device[1], device[2], device[3] )
-                    tordevices.add_functions( device[1], device[6], device[7], device[8], device[9] )
-                    time.sleep(2)
-                    break;
-            if timeout < int(datetime.timestamp( datetime.now() )):
-                break;
+    tordevices.add_device( device[1], device[2], device[3], False )
+    tordevices.add_functions( device[1], device[6], device[7], device[8], device[9] )
 
 timestamp = None
 showLogo()
@@ -330,8 +307,8 @@ defaultLCD()
 try:
     while True:
         rfid()
+        defaultLCD();
         if slaves.count_slaves() > 0 and tordevices.count_devices() > 0:
-            r433()
             program()
 
 except KeyboardInterrupt:

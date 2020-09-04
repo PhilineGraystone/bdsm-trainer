@@ -50,11 +50,8 @@ class PunMQTT(paho.Client):
         device = msg.topic.split('/')
 
         if device[3] == "available":
-            if ( self.devices.device_online( device[2] ) == False ):
-                self.cursor.execute("SELECT * FROM devices, torfunctions WHERE tf_devid = dev_id AND dev_name = '"+device[2]+"' ")
-                device = self.cursor.fetchone()
-                self.devices.add_device( device[1], device[2], device[3] )
-                self.devices.add_functions( device[1], device[6], device[7], device[8], device[9] )
+            if self.devices.device_online( device[2] ) == False:
+                self.devices.set_online( device[2] )
                 self.tdevice.append( {'device': device[1], 'timestamp': int(time.time() + 120) } )
 
     def on_publish(self, mqttc, obj, mid):
