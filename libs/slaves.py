@@ -2,8 +2,8 @@ class slaves():
     persons = []
     devices = []
 
-    def add_slave( self, rfid, name, collar, program, modes ):
-        slave = { 'rfid': rfid, 'name': name, 'collar': collar, 'program': program, 'modes': modes }
+    def add_slave( self, slave_id, rfid, name, collar, program, modes ):
+        slave = { 'id': slave_id, 'rfid': rfid, 'name': name, 'collar': collar, 'program': program, 'modes': modes }
         self.persons.append( slave )
     
     def slave_online( self, rfid ):
@@ -27,6 +27,12 @@ class slaves():
         for slave in self.persons:
             if slave['rfid'] == rfid:
                 return slave['modes']
+
+    def get_id( self, rfid ):
+        for slave in self.persons:
+            if slave['rfid'] == rfid:
+                return slave['id']
+
     def which( self, dev ):
         for device in self.devices:
             if device['device'] == dev:

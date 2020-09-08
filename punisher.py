@@ -106,6 +106,8 @@ def shock( rfid, mode ):
     global stamp, realstamp, punmqtt
 
     devices = slaves.get_device( rfid )
+    slave_id = slaves.get_id( rfid )
+
     if realstamp[ rfid ] > 0 and realstamp[ rfid ] < int( datetime.timestamp( datetime.now()) ):
         showLogo()
         realstamp[ rfid ] = 0
@@ -136,13 +138,14 @@ def shock( rfid, mode ):
                         stamp[ rfid ]     = int(datetime.timestamp( datetime.now() )) + seconds + counter +random.randint(10, 120)
                         realstamp[ rfid ] = int(datetime.timestamp( datetime.now() )) + seconds + counter
                         if device['protocol'] == "MQTT":
-                            punmqtt.publish('punisher/functions/shock', str(counter)+','+str(seconds) )
+                            punmqtt.publish('punisher/slave/'+str(slave_id)+'/shock', '{"seconds": '+str(seconds)+', "countdown": '+str(counter)+'}' )
                         if i['image'] != "":
                             showfunc( i['image'] )
 
 def shock_punish( rfid, seconds ):
     global stamp, realstamp
     devices = slaves.get_device( rfid )
+    slave_id = slaves.get_id( rfid )
 
     for dev in devices:
         if tordevices.support_function( dev['device'], 'tens' ):
@@ -150,7 +153,7 @@ def shock_punish( rfid, seconds ):
             funcs   = tordevices.get_functions( dev['device'], 'tens' )
             for i in funcs:
                 if device['protocol'] == "MQTT":
-                    punmqtt.publish('punisher/functions/shock', str(counter)+','+str(seconds) )
+                    punmqtt.publish('punisher/slave/'+str(slave_id)+'/shock', '{"seconds": '+str(seconds)+', "countdown": '+str(counter)+'}' )
                 if i['image'] != "":
                     showfunc( i['image'] )
 
@@ -251,7 +254,7 @@ def rfid():
                     defaultLCD()
                 else:
                     logger.debug( "Slave '"+slave[2]+"' connected - RFID "+slaveid )
-                    slaves.add_slave( slave[1], slave[2], slave[3], slave[6], slave[7] )
+                    slaves.add_slave( slave[0], slave[1], slave[2], slave[3], slave[6], slave[7] )
                     stamp[ slave[1] ] = datetime.timestamp( datetime.now() )
                     realstamp[ slave[1] ] = datetime.timestamp( datetime.now() )
                     cursor.execute('SELECT * FROM devtoslave, devices WHERE dts_slaveid = "'+str(slave[0])+'" AND dev_id = dts_deviceid')
