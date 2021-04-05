@@ -59,6 +59,15 @@ logger.addHandler( log )
 config = configparser.ConfigParser()
 config.read('config/config.ini')
 
+deviceavail = defaultdict(list)
+i2cbus = SMBus(1)
+oled = ssd1306(i2cbus)
+lcd = lcddriver.lcd()
+draw = oled.canvas
+MIFAREReader = MFRC522.MFRC522()
+
+
+
 def cleanup():
     lcd.lcd_clear()
     oled.cls()
@@ -125,15 +134,15 @@ def shock( rfid, mode ):
                         if mode == 1:
                             seconds = 10
                         elif mode == 2:
-                            seconds = 30
+                            seconds = 15
                         elif mode == 3:
-                            seconds = 60
+                            seconds = 16
                         elif mode == 4:
-                            seconds = 90
+                            seconds = 17
                         elif mode == 5:
-                            seconds = 120
+                            seconds = 18
                         elif mode == 6:
-                            seconds = 160
+                            seconds = 19
 
                         stamp[ rfid ]     = int(datetime.timestamp( datetime.now() )) + seconds + counter +random.randint(10, 120)
                         realstamp[ rfid ] = int(datetime.timestamp( datetime.now() )) + seconds + counter
@@ -141,6 +150,62 @@ def shock( rfid, mode ):
                             punmqtt.publish('punisher/slave/'+str(slave_id)+'/shock', '{"seconds": '+str(seconds)+', "countdown": '+str(counter)+'}' )
                         if i['image'] != "":
                             showfunc( i['image'] )
+
+        if tordevices.support_function( dev['device'], '´collar' ):
+            device = tordevices.get_device( dev['device'] )
+            funcs   = tordevices.get_functions( dev['device'], 'collar' )
+            for i in funcs:
+                if int(datetime.timestamp( datetime.now()) ) > stamp[ rfid ]:
+                    value = random.randint(0, 30)
+                    counter = random.randint(0, 30)
+                    if value == 1:
+                        mode = randint(1,6)
+                        if mode == 1:
+                            seconds = 10
+                        elif mode == 2:
+                            seconds = 15
+                        elif mode == 3:
+                            seconds = 16
+                        elif mode == 4:
+                            seconds = 17
+                        elif mode == 5:
+                            seconds = 18
+                        elif mode == 6:
+                            seconds = 19
+
+                        stamp[ rfid ]     = int(datetime.timestamp( datetime.now() )) + seconds + counter +random.randint(10, 120)
+                        realstamp[ rfid ] = int(datetime.timestamp( datetime.now() )) + seconds + counter
+                        if device['protocol'] == "MQTT":
+                            punmqtt.publish('punisher/slave/'+str(slave_id)+'/shock', '{"seconds": '+str(seconds)+', "countdown": '+str(counter)+'}' )
+                        if i['image'] != "":
+                            showfunc( i['image'] )
+
+
+def blowjob( rfid, seconds ):
+    global stamp, realstamp, punmqtt
+
+    devices = slaves.get_device( rfid )
+    slave_id = slaves.get_id( rfid )
+
+    if realstamp[ rfid ] > 0 and realstamp[ rfid ] < int( datetime.timestamp( datetime.now()) ):
+        showLogo()
+        realstamp[ rfid ] = 0
+
+    for dev in devices:
+        if tordevices.support_function( dev['device'], 'blowjob' ):
+            device = tordevices.get_device( dev['device'] )
+            funcs   = tordevices.get_functions( dev['device'], 'blowjob' )
+            for i in funcs:
+                if int(datetime.timestamp( datetime.now()) ) > stamp[ rfid ]:
+                    seconds = int(seconds)
+                    stamp[ rfid ]     = int(datetime.timestamp( datetime.now() )) + seconds + random.randint(10, 120)
+                    realstamp[ rfid ] = int(datetime.timestamp( datetime.now() )) + seconds
+
+                    if device['protocol'] == "MQTT":
+                        punmqtt.publish('punisher/slave/'+str(slave_id)+'/blowjob', '{"seconds": 60, "countdown": 100}' )
+                    if i['image'] != "":
+                        showfunc( i['image'] )
+
 
 def shock_punish( rfid, seconds ):
     global stamp, realstamp
@@ -157,27 +222,6 @@ def shock_punish( rfid, seconds ):
                 if i['image'] != "":
                     showfunc( i['image'] )
 
-def blowjob( rfid, seconds ):
-    global stamp, realstamp
-    devices = slaves.get_device( rfid )
-    if realstamp[ rfid ] > 0 and realstamp[ rfid ] < int( datetime.timestamp( datetime.now()) ):
-        showLogo()
-        realstamp[ rfid ] = 0
-
-    for dev in devices:
-        if tordevices.support_function( dev['device'], 'blowjob' ):
-            device = tordevices.get_device( dev['device'] )
-            funcs   = tordevices.get_functions( dev['device'], 'blowjob' )
-            for i in funcs:
-                if int(datetime.timestamp( datetime.now()) ) > stamp[ rfid ]:
-                    seconds = int(seconds)
-                    stamp[ rfid ]     = int(datetime.timestamp( datetime.now() )) + seconds + random.randint(10, 120)
-                    realstamp[ rfid ] = int(datetime.timestamp( datetime.now() )) + seconds
-
-                    if device['protocol'] == "MQTT":
-                        punmqtt.publish('punisher/functions/blowjob', str(seconds)+',10' )
-                    if i['image'] != "":
-                        showfunc( i['image'] )
 
 def painplay( rfid ):
     global stamp, slaves
@@ -185,7 +229,10 @@ def painplay( rfid ):
     modes = modes.split(',')
     for mode in modes:
         func = mode.split('|')
+        print( mode )
         if func[0] == "tens":
+            shock( rfid, func[1] )
+        if func[0] == "collar":
             shock( rfid, func[1] )
 
 def blowjobtraining( rfid ):
@@ -263,19 +310,12 @@ def rfid():
                         if tordevices.device_online( dev[4] ):
                             slaves.add_device( slave[1], slave[2], dev[4] )
                             punmqtt.publish("punisher/devices/"+dev[4]+"/settings", "{\"slave_id\": "+str(slave[0])+", \"slave_name\": \""+slave[2]+"\"} ");
-
                     showLCD(slave[2], 'Slave connected')
                     sleep(2)
                     showLCD('Training program', slave[6]+' started...')
-                    sleep(2)
+                    sleep(30)
                     defaultLCD()
 
-deviceavail = defaultdict(list)
-i2cbus = SMBus(1)
-oled = ssd1306(i2cbus)
-lcd = lcddriver.lcd()
-draw = oled.canvas
-MIFAREReader = MFRC522.MFRC522()
 
 try:
     db = pymysql.connect( config['database']['hostname'], config['database']['username'], config['database']['password'], config['database']['database'] )
@@ -295,13 +335,6 @@ cursor = db.cursor()
 
 punmqtt = PunMQTT('Punisher')
 punmqtt.run( config, logger, tordevices, cursor )
-
-cursor.execute('SELECT * FROM devices, torfunctions WHERE tf_devid = dev_id')
-devices = cursor.fetchall()
-
-for device in devices:
-    tordevices.add_device( device[1], device[2], device[3], False )
-    tordevices.add_functions( device[1], device[6], device[7], device[8], device[9] )
 
 timestamp = None
 showLogo()

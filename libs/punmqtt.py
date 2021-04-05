@@ -49,10 +49,42 @@ class PunMQTT(paho.Client):
 #        print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
         device = msg.topic.split('/')
 
+        if device[3] == "response":
+            for ddevice in self.tdevice:
+                if ddevice['device'] == device[2]:
+                    answer = msg.payload.decode("utf-8")
+                    if len( answer ) == 73:
+                        uuids = answer.split(',')
+                        self.devices.add_device( uuids[0], uuids[1], None, True )
+                        self.tdevice.remove( {'device': ddevice['device'], 'timestamp': ddevice['timestamp'], 'status': 'pending' } )
+                        self.tdevice.append( {'device': ddevice['device'], 'timestamp': int(time.time() + 120), 'status': 'online' } )
+
         if device[3] == "available":
-            if self.devices.device_online( device[2] ) == False:
-                self.devices.set_online( device[2] )
-                self.tdevice.append( {'device': device[1], 'timestamp': int(time.time() + 120) } )
+            must_add = True
+
+            for ddevice in self.tdevice:
+                if int( ddevice['timestamp'] ) < int( time.time() ):
+                    self.tdevice.remove( {'device': ddevice['device'], 'timestamp': ddevice['timestamp'], 'status': 'online' } )
+                    self.devices.remove_device( ddevice['device'] )
+
+
+            for ddevice in self.tdevice:
+                if ddevice['device'] == device[2]:
+                    must_add = False
+                    if ddevice['status'] == "pending":
+                        if int( ddevice['timestamp'] ) < int( time.time() ):
+                            self.tdevice.remove( {'device': ddevice['device'], 'timestamp': ddevice['timestamp'], 'status': 'pending' } )
+                            break
+
+                    if ddevice['status'] == "online":
+                        self.tdevice.remove( {'device': ddevice['device'], 'timestamp': ddevice['timestamp'], 'status': 'online' } )
+                        self.tdevice.append( {'device': ddevice['device'], 'timestamp': int(time.time() + 120), 'status': 'online' } )
+                        break
+                print( self.tdevice )
+
+            if must_add == True:
+                self.publish('punisher/devices/'+str( device[2] )+'/settings', '{"initial": "functions"}')
+                self.tdevice.append( {'device': device[2], 'timestamp': int(time.time() + 120), 'status': 'pending' } )
 
     def on_publish(self, mqttc, obj, mid):
         self.logger.debug("MQTT - Published: "+str(mid))

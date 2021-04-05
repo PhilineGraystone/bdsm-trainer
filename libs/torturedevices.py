@@ -1,11 +1,29 @@
-class torturedevices():
-    devices = []
-    functions = []
+from torturedevice import torturedevice
 
-    def add_device( self, name, ip, protocol, online ):
-        device = { 'name' : name, 'ip': ip, 'protocol': protocol, 'online': online }
-        self.devices.append( device )
-    
+class torturedevices():
+
+    devices = []
+    functions = dict()
+
+    def add_device( self, model, device, ip, online ):
+        switch = False
+        for ddevice in self.devices:
+            if ddevice.get_device() == device:
+                switch = True
+
+        if switch == False:
+            r = torturedevice( model, device, ip, online )
+            self.devices.append( r )
+
+    def remove_device( self, device ):
+        new_devices = []
+        for ddevice in self.devices:
+            if device != ddevice.get_device():
+                new_devices.append( ddevice )
+        
+        self.devices = new_devices
+        print( self.devices )
+
     def add_functions( self, name, function, pic, call, args ):
         function = { 'device': name, 'func': function, 'image': pic, 'call': call, 'args': args }
         self.functions.append( function )
@@ -44,9 +62,6 @@ class torturedevices():
         return False
 
     def count_devices(self):
-        i = 0
-        for device in self.devices:
-            if device['online'] == True:
-                i = i + 1
+        i = len( self.devices )
         return i
 
