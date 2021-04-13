@@ -33,7 +33,7 @@ class torturedevice:
 
     def shock(self, seconds, countdown):
         if self.func_shock == True:
-            command = "{"seconds": '+str(seconds)+', "countdown": '+str(countdown)+'}"
+            command = '{"seconds": '+str(seconds)+', "countdown": '+str(countdown)+'}'
         else:
             command = None
         return command
@@ -48,5 +48,8 @@ class torturedevice:
         pass
 
     def switch(self):
+        pass
+
+    def mode_pet(self):
         pass
 

@@ -284,21 +284,22 @@ def rfid():
                 defaultLCD()
             else:
                 if slaves.slave_online( slave[1] ):
-                    logger.debug( "Slave '"+slave[2]+"'  disconnected - RFID "+slaveid )
-                    devices = slaves.get_device( slave[1] )
+                   pass
+#                    logger.debug( "Slave '"+slave[2]+"'  disconnected - RFID "+slaveid )
+#                    devices = slaves.get_device( slave[1] )
 
-                    for dev in devices:
-                        device = tordevices.get_device( dev['device'] )
+#                    for dev in devices:
+#                        device = tordevices.get_device( dev['device'] )
 
-                        if device['protocol'] == "MQTT":
-                            punmqtt.publish("punisher/devices/"+dev['device']+"/settings", "{\"slave_id\": 0, \"slave_name\": \""+slave[2]+"\"} ");
+#                        if device['protocol'] == "MQTT":
+#                            punmqtt.publish("punisher/devices/"+dev['device']+"/settings", "{\"slave_id\": 0, \"slave_name\": \""+slave[2]+"\"} ");
 
-                    slaves.remove_slave( slave[1] )
-                    showLCD(slave[2], 'Slave disconnected')
-                    sleep(2)
-                    showLCD('Training program', 'disabled...')
-                    sleep(2)
-                    defaultLCD()
+#                    slaves.remove_slave( slave[1] )
+#                    showLCD(slave[2], 'Slave disconnected')
+#                    sleep(2)
+#                    showLCD('Training program', 'disabled...')
+#                    sleep(2)
+#                    defaultLCD()
                 else:
                     logger.debug( "Slave '"+slave[2]+"' connected - RFID "+slaveid )
                     slaves.add_slave( slave[0], slave[1], slave[2], slave[3], slave[6], slave[7] )

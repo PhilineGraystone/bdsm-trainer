@@ -7,13 +7,14 @@ import time
 
 
 class PunMQTT(paho.Client):
-    tdevice = []
+    tdevice = {}
 
     def on_connect(self, mqttc, obj, flags, rc):
         if rc == 0:
             self.logger.debug('MQTT: Connection successfully established')
             self.subscribe('punisher/devices/+/response',0)
             self.subscribe('punisher/devices/+/available',0)
+            self.subscribe('$SYS/broker/uptime',0)
         elif rc == 1:
             self.logger.debug('MQTT: Connection successfully established')
             print("Wrong protocol version")
@@ -46,45 +47,34 @@ class PunMQTT(paho.Client):
             sys.exit(1)
 
     def on_message(self, mqttc, obj, msg):
-#        print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
+        print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
         device = msg.topic.split('/')
 
+        for ddevice in self.tdevice.keys():
+            if int( self.tdevice[ ddevice ][ 'timestamp' ] + 120 ) < int( time.time() ):
+                self.logger.debug('MQTT: Remove a device (timeout):' + str( ddevice ) )
+                self.tdevice.pop( ddevice, None )
+                self.devices.remove_device( ddevice )
+
         if device[3] == "response":
-            for ddevice in self.tdevice:
-                if ddevice['device'] == device[2]:
-                    answer = msg.payload.decode("utf-8")
-                    if len( answer ) == 73:
-                        uuids = answer.split(',')
-                        self.devices.add_device( uuids[0], uuids[1], None, True )
-                        self.tdevice.remove( {'device': ddevice['device'], 'timestamp': ddevice['timestamp'], 'status': 'pending' } )
-                        self.tdevice.append( {'device': ddevice['device'], 'timestamp': int(time.time() + 120), 'status': 'online' } )
+            device = str( device[2] )
+            if device in self.tdevice.keys():
+                answer = msg.payload.decode("utf-8")
+                if len( answer ) == 73:
+                    uuids = answer.split(',')
+                    self.devices.add_device( uuids[0], uuids[1], None, True )
+                    self.tdevice[ device ] = {'timestamp': int( time.time()  + 120), 'status': 'online' }
 
         if device[3] == "available":
-            must_add = True
+            device = str( device[2] )
+            if not device in self.tdevice.keys():
+                self.logger.debug('MQTT: Announce a new device:' + str( device ) )
+                self.publish('punisher/devices/'+str( device )+'/settings', '{"initial": "functions"}')
+                self.tdevice[ device ] = {'timestamp': int(time.time() + 120), 'status': 'pending'}
+            else:
+               if self.tdevice[ device ][ 'status' ] is not 'pending':
+                   self.tdevice[ device ] = {'timestamp': int(time.time() + 120), 'status': 'online'}
 
-            for ddevice in self.tdevice:
-                if int( ddevice['timestamp'] ) < int( time.time() ):
-                    self.tdevice.remove( {'device': ddevice['device'], 'timestamp': ddevice['timestamp'], 'status': 'online' } )
-                    self.devices.remove_device( ddevice['device'] )
-
-
-            for ddevice in self.tdevice:
-                if ddevice['device'] == device[2]:
-                    must_add = False
-                    if ddevice['status'] == "pending":
-                        if int( ddevice['timestamp'] ) < int( time.time() ):
-                            self.tdevice.remove( {'device': ddevice['device'], 'timestamp': ddevice['timestamp'], 'status': 'pending' } )
-                            break
-
-                    if ddevice['status'] == "online":
-                        self.tdevice.remove( {'device': ddevice['device'], 'timestamp': ddevice['timestamp'], 'status': 'online' } )
-                        self.tdevice.append( {'device': ddevice['device'], 'timestamp': int(time.time() + 120), 'status': 'online' } )
-                        break
-                print( self.tdevice )
-
-            if must_add == True:
-                self.publish('punisher/devices/'+str( device[2] )+'/settings', '{"initial": "functions"}')
-                self.tdevice.append( {'device': device[2], 'timestamp': int(time.time() + 120), 'status': 'pending' } )
 
     def on_publish(self, mqttc, obj, mid):
         self.logger.debug("MQTT - Published: "+str(mid))
