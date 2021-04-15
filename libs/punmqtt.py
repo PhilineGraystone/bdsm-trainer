@@ -47,7 +47,7 @@ class PunMQTT(paho.Client):
             sys.exit(1)
 
     def on_message(self, mqttc, obj, msg):
-        print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
+#        print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
         device = msg.topic.split('/')
 
         for ddevice in self.tdevice.keys():
@@ -62,7 +62,7 @@ class PunMQTT(paho.Client):
                 answer = msg.payload.decode("utf-8")
                 if len( answer ) == 73:
                     uuids = answer.split(',')
-                    self.devices.add_device( uuids[0], uuids[1], None, True )
+                    self.devices.add_device( self, uuids[0], uuids[1], None, True )
                     self.tdevice[ device ] = {'timestamp': int( time.time()  + 120), 'status': 'online' }
 
         if device[3] == "available":

@@ -1,20 +1,35 @@
+from slave import slave
+
 class slaves():
-    persons = []
+    slaves  = {}
     devices = []
 
-    def add_slave( self, slave_id, rfid, name, collar, program, modes ):
-        slave = { 'id': slave_id, 'rfid': rfid, 'name': name, 'collar': collar, 'program': program, 'modes': modes }
-        self.persons.append( slave )
-    
+    def add_slave( self, mqtt, devices, slave_id, rfid, name, program, modes ):
+        if not rfid in self.slaves.keys():
+            self.slaves[ rfid ] = slave( mqtt, devices, slave_id, name, rfid, program, modes )
+
     def slave_online( self, rfid ):
-        for slave in self.persons:
-            if slave['rfid'] == rfid:
-                return True
-        return False
+        if rfid in self.slaves.keys():
+            return True
+        else:
+            return False
 
     def remove_slave( self, rfid ):
-        self.persons = [i for i in self.persons if not (i['rfid'] == rfid)]
-        self.devices = [i for i in self.devices if not (i['rfid'] == rfid)]
+        self.slaves[ rfid ].disconnect()
+        self.slaves.pop( rfid, None )
+
+    def count_slaves( self ):
+        return len( self.slaves )
+
+    def add_device( self, rfid, device ):
+        self.slaves[ rfid ].add_device( device )
+
+    def execute_program(self):
+        for slave in self.slaves.keys():
+            self.slaves[ slave ].execute()
+
+
+
 
     def torture_possible(self, rfid):
         for device in self.devices:
@@ -40,10 +55,6 @@ class slaves():
         return False
 
 
-    def add_device( self, rfid, slave, device ):
-        device = { 'rfid': rfid, 'slave': slave, 'device': device }
-        self.devices.append( device )
-
     def get_device( self, rfid ):
         dev = []
         for device in self.devices:
@@ -54,5 +65,3 @@ class slaves():
     def all_slaves( self ):
         return self.persons
 
-    def count_slaves( self ):
-        return len( self.persons )
