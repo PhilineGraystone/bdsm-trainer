@@ -15,6 +15,9 @@ class torturedevice:
 
     mqtt            = None
 
+    owner           = None
+    registred       = None
+
     def __init__(self, mqtt, model, device, ip_address, status):
         self.mqtt           = mqtt
 
@@ -22,6 +25,8 @@ class torturedevice:
         self.uuid_model 	= model
         self.ip_address	    = ip_address
         self.status		    = status
+        self.owner          = False
+        self.registered     = False
 
         if model == "eaa4cae0-65d6-4cf2-80ef-d8d0f8e8f6f0":
             self.uuid_name      = "Stretcher and Shocker"

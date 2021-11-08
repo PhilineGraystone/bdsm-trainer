@@ -55,15 +55,17 @@ class PunMQTT(paho.Client):
                 self.logger.debug('MQTT: Remove a device (timeout):' + str( ddevice ) )
                 self.tdevice.pop( ddevice, None )
                 self.devices.remove_device( ddevice )
+                self.slaves.set_online_device_to_offline( ddevice )
 
         if device[3] == "response":
             device = str( device[2] )
             if device in self.tdevice.keys():
                 answer = msg.payload.decode("utf-8")
-                if len( answer ) == 73:
+                if len( answer ) == 36:
                     uuids = answer.split(',')
-                    self.devices.add_device( self, uuids[0], uuids[1], None, True )
+                    self.devices.add_device( self, uuids[0], device, None, True )
                     self.tdevice[ device ] = {'timestamp': int( time.time()  + 120), 'status': 'online' }
+                    self.slaves.get_slave_id_from_offline_device( device )
 
         if device[3] == "available":
             device = str( device[2] )
@@ -85,10 +87,11 @@ class PunMQTT(paho.Client):
     def on_log(self, mqttc, obj, level, string):
         self.logger.debug("MQTT - FULLLOG: "+string)
 
-    def run(self, config, logger, devices, db):
+    def run(self, config, logger, devices, db, slaves):
         self.logger  = logger
         self.devices = devices
         self.cursor  = db
+        self.slaves  = slaves
 
         self.username_pw_set( config['mqtt']['username'], config['mqtt']['password'] )
         self.connect( config['mqtt']['hostname'], 1883, 60 )

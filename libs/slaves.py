@@ -1,8 +1,8 @@
 from slave import slave
 
 class slaves():
-    slaves  = {}
-    devices = []
+    slaves      = {}
+    devices     = []
 
     def add_slave( self, mqtt, devices, slave_id, rfid, name, program, modes ):
         if not rfid in self.slaves.keys():
@@ -24,12 +24,12 @@ class slaves():
     def add_device( self, rfid, device ):
         self.slaves[ rfid ].add_device( device )
 
+    def add_offline_device( self, rfid, device ):
+        self.slaves[ rfid ].add_offline_device( device )
+
     def execute_program(self):
         for slave in self.slaves.keys():
             self.slaves[ slave ].execute()
-
-
-
 
     def torture_possible(self, rfid):
         for device in self.devices:
@@ -65,3 +65,13 @@ class slaves():
     def all_slaves( self ):
         return self.persons
 
+    def get_slave_id_from_offline_device(self, off_device):
+        for slave in self.slaves.keys():
+            if self.slaves[ slave ].get_offline_device( off_device ) == True:
+                self.slaves[ slave ].set_offline_device_as_online( off_device )
+
+
+    def set_online_device_to_offline(self, on_device):
+        for slave in self.slaves.keys():
+            if self.slaves[ slave ].get_online_device( on_device ) == True:
+                self.slaves[ slave ].set_online_device_as_offline( on_device )

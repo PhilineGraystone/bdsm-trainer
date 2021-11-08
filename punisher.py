@@ -200,11 +200,16 @@ def rfid():
                     for dev in device:
                         if tordevices.device_online( dev[4] ):
                             slaves.add_device( slave[1], dev[4] )
+                        else:
+                            slaves.add_offline_device( slave[1], dev[4] )
+
                     showLCD(slave[2], 'Slave connected')
                     sleep(2)
                     showLCD('Training program', slave[6]+' started...')
                     sleep(10)
                     defaultLCD()
+
+    
 
 
 try:
@@ -224,7 +229,7 @@ except:
 cursor = db.cursor()
 
 punmqtt = PunMQTT('Punisher')
-punmqtt.run( config, logger, tordevices, cursor )
+punmqtt.run( config, logger, tordevices, cursor, slaves )
 
 showLogo()
 defaultLCD()

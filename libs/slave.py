@@ -2,12 +2,13 @@ from painplay import painplay
 from petplay import petplay
 
 class slave:
-    slave_id        = 0;
-    slave_name      = ""
-    slave_rfid      = ""
-    slave_devices   = []
-    slave_program   = ""
-    slave_mode      = ""
+    slave_id                = 0;
+    slave_name              = ""
+    slave_rfid              = ""
+    slave_devices           = []
+    slave_offline_devices   = []
+    slave_program           = ""
+    slave_mode              = ""
 
     mqtt            = None
     devices         = None
@@ -34,9 +35,39 @@ class slave:
         self.slave_devices.append( device )
         self.mqtt.publish("punisher/devices/"+device+"/settings", "{\"slave_id\": "+str(self.slave_id)+", \"slave_name\": \""+self.slave_name+"\"} ");
 
+    def add_offline_device(self, device):
+        self.slave_offline_devices.append( device )
+
     def disconnect(self):
         for device in self.slave_devices:
             self.mqtt.publish("punisher/devices/"+device+"/settings", "{\"slave_id\": 0, \"slave_name\": \""+self.slave_name+"\"} ");
+
+    def get_offline_device(self, off_device ):
+        for device in self.slave_offline_devices:
+            if device == off_device:
+                return True
+        return False
+
+    def get_online_device(self, on_device ):
+        for device in self.slave_devices:
+            if device == on_device:
+                return True
+        return False
+
+
+    def set_offline_device_as_online(self, off_device):
+        self.remove_offline_device( off_device )
+        self.add_device( off_device )
+
+    def set_online_device_as_offline(self, on_device):
+        self.remove_online_device( on_device )
+        self.add_offline_device( on_device )
+
+    def remove_offline_device(self, off_device ):
+        self.slave_offline_devices.remove( off_device )
+
+    def remove_online_device(self, on_device ):
+        self.slave_devices.remove( on_device )
 
     def execute(self):
         self.slave_program.execute();
