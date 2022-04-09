@@ -65,6 +65,7 @@ class slaves():
     def all_slaves( self ):
         return self.persons
 
+
     def get_slave_id_from_offline_device(self, off_device):
         for slave in self.slaves.keys():
             if self.slaves[ slave ].get_offline_device( off_device ) == True:

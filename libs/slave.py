@@ -1,5 +1,4 @@
-from painplay import painplay
-from petplay import petplay
+from slaveprogram import slaveprogram
 
 class slave:
     slave_id                = 0;
@@ -21,15 +20,8 @@ class slave:
         self.slave_name 	= slave_name
         self.slave_rfid     = rfid
         self.slave_mode     = mode
+        self.slave_program  = slaveprogram( self, program )
 
-        if program == "Painplay":
-            self.slave_program  = painplay( self )
-        if program == "Petplay":
-            self.slave_program  = petplay( self )
-        if program == "Condition":
-            pass
-        if program == "Blowjob":
-            pass
 
     def add_device(self, device):
         self.slave_devices.append( device )
@@ -70,7 +62,7 @@ class slave:
         self.slave_devices.remove( on_device )
 
     def execute(self):
-        self.slave_program.execute();
+        self.slave_program.execute()
 
     def get_slave_name(self):
         return self.slave_name

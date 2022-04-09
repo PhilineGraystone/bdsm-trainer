@@ -4,6 +4,7 @@ class torturedevice:
     func_piep   	= False
     func_stretch	= False
     func_switch		= False
+    func_lock		= False
 
     mode_pet        = False
 
@@ -40,6 +41,10 @@ class torturedevice:
             self.func_piep		= True
             self.mode_pet       = True
 
+        if model == "1acf784c-4bfd-4a06-b4ff-ee578a37fac4":
+            self.func_lock		= True
+            self.func_pet		= True
+
     def get_device(self):
         return self.uuid_device
 
@@ -67,3 +72,6 @@ class torturedevice:
             self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"shock": 10, "vibe": 40, "beep": 0, "duration": 250}' )
             self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"mode": 4}' )
 
+    def lock(self, minutes):
+        if self.func_lock == True:
+            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/lock', '{"seconds": '+str(minutes)+'}' )

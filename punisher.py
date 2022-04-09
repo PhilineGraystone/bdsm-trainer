@@ -106,56 +106,15 @@ def defaultLCD():
         old_slave_count = slaves.count_slaves()
         old_device_count = tordevices.count_devices()
 
-def blowjob( rfid, seconds ):
-    global stamp, realstamp, punmqtt
+def load_program( slave_id ):
+    global cursor
+    cursor.execute('SELECT * FROM slave_program WHERE sp_slave = "'+str( slave_id )+'" AND sp_enabled = "Y"')
+    program_details = cursor.fetchone()
 
-    devices = slaves.get_device( rfid )
-    slave_id = slaves.get_id( rfid )
-
-    if realstamp[ rfid ] > 0 and realstamp[ rfid ] < int( datetime.timestamp( datetime.now()) ):
-        showLogo()
-        realstamp[ rfid ] = 0
-
-    for dev in devices:
-        if tordevices.support_function( dev['device'], 'blowjob' ):
-            device = tordevices.get_device( dev['device'] )
-            funcs   = tordevices.get_functions( dev['device'], 'blowjob' )
-            for i in funcs:
-                if int(datetime.timestamp( datetime.now()) ) > stamp[ rfid ]:
-                    seconds = int(seconds)
-                    stamp[ rfid ]     = int(datetime.timestamp( datetime.now() )) + seconds + random.randint(10, 120)
-                    realstamp[ rfid ] = int(datetime.timestamp( datetime.now() )) + seconds
-
-                    if device['protocol'] == "MQTT":
-                        punmqtt.publish('punisher/slave/'+str(slave_id)+'/blowjob', '{"seconds": 60, "countdown": 100}' )
-                    if i['image'] != "":
-                        showfunc( i['image'] )
-
-
-def shock_punish( rfid, seconds ):
-    global stamp, realstamp
-    devices = slaves.get_device( rfid )
-    slave_id = slaves.get_id( rfid )
-
-    for dev in devices:
-        if tordevices.support_function( dev['device'], 'tens' ):
-            device = tordevices.get_device( dev['device'] )
-            funcs   = tordevices.get_functions( dev['device'], 'tens' )
-            for i in funcs:
-                if device['protocol'] == "MQTT":
-                    punmqtt.publish('punisher/slave/'+str(slave_id)+'/shock', '{"seconds": '+str(seconds)+', "countdown": '+str(counter)+'}' )
-                if i['image'] != "":
-                    showfunc( i['image'] )
-
-
-def blowjobtraining( rfid ):
-    global stamp, slaves
-    modes = slaves.get_modes( rfid )
-    modes = modes.split(',')
-    for mode in modes:
-        func = mode.split('|')
-        if func[0] == "blowjob":
-            blowjob( rfid, func[1] )
+    cursor.execute('SELECT * FROM program_commands WHERE pc_program = "'+str( program_details[0] )+'"')
+    commands = cursor.fetchall()
+    return( commands )
+    
 
 def program():
     slaves.execute_program()
@@ -192,7 +151,8 @@ def rfid():
                     defaultLCD()
                 else:
                     logger.debug( "Slave '"+slave[2]+"' connected - RFID "+slaveid )
-                    slaves.add_slave( punmqtt, tordevices, slave[0], slave[1], slave[2], slave[6], slave[7] )
+                    program = load_program( slave[0] )
+                    slaves.add_slave( punmqtt, tordevices, slave[0], slave[1], slave[2], program, slave[7] )
                     stamp[ slave[1] ] = datetime.timestamp( datetime.now() )
                     realstamp[ slave[1] ] = datetime.timestamp( datetime.now() )
                     cursor.execute('SELECT * FROM devtoslave, devices WHERE dts_slaveid = "'+str(slave[0])+'" AND dev_id = dts_deviceid')
