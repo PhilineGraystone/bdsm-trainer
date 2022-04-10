@@ -93,3 +93,19 @@ class slave:
         for device in self.slave_devices:
             self.devices.devices[ device ].pet()
 
+    def wlan_fence(self):
+        for device in self.slave_devices:
+            self.devices.devices[ device ].wlan_fence()
+
+    def sleep_deprivation(self):
+        for device in self.slave_devices:
+            self.devices.devices[ device ].sleep_deprivation()
+
+    def remote_control(self):
+        for device in self.slave_devices:
+            self.devices.devices[ device ].remote_control()
+
+    def maglock(self, minutes):
+        for device in self.slave_devices:
+            self.devices.devices[ device ].maglock( minutes )
+

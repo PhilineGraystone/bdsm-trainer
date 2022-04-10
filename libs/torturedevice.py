@@ -7,6 +7,9 @@ class torturedevice:
     func_lock		= False
 
     mode_pet        = False
+    mode_wlan_fence = False
+    mode_sleep_dep  = False
+    mode_remote     = False
 
     uuid_device		= ""
     uuid_model		= ""
@@ -40,10 +43,12 @@ class torturedevice:
             self.func_vibe		= True
             self.func_piep		= True
             self.mode_pet       = True
+            self.mode_wlan_fence= True
+            self.mode_sleep_dep = True
+            self.mode_remote    = True
 
         if model == "1acf784c-4bfd-4a06-b4ff-ee578a37fac4":
             self.func_lock		= True
-            self.func_pet		= True
 
     def get_device(self):
         return self.uuid_device
@@ -69,9 +74,24 @@ class torturedevice:
 
     def pet(self):
         if self.mode_pet == True:
-            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"shock": 10, "vibe": 40, "beep": 0, "duration": 250}' )
+#            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"shock": 10, "vibe": 40, "beep": 0, "duration": 250}' )
             self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"mode": 4}' )
 
-    def lock(self, minutes):
+    def wlan_fence(self):
+        if self.mode_wlan_fence == True:
+#            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"shock": 10, "vibe": 40, "beep": 0, "duration": 250}' )
+            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"mode": 1}' )
+
+    def sleep_deprivation(self):
+        if self.mode_sleep_dep == True:
+#            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"shock": 10, "vibe": 40, "beep": 0, "duration": 250}' )
+            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"mode": 3}' )
+
+    def remote_control(self):
+        if self.mode_remote == True:
+#            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"shock": 10, "vibe": 40, "beep": 0, "duration": 250}' )
+            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/settings', '{"mode": 0}' )
+
+    def maglock(self, minutes):
         if self.func_lock == True:
-            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/lock', '{"seconds": '+str(minutes)+'}' )
+            self.mqtt.publish('punisher/devices/'+str(self.uuid_device)+'/lock', '{"minutes": '+str(minutes)+'}' )
