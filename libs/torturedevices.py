@@ -28,3 +28,8 @@ class torturedevices():
         i = len( self.devices )
         return i
 
+    def set_response(self, device, response):
+        if not device in self.devices.keys():
+            return False
+        else:
+            return self.devices[ device ].set_response( response )

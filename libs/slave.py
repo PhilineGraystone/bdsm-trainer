@@ -109,3 +109,12 @@ class slave:
         for device in self.slave_devices:
             self.devices.devices[ device ].maglock( minutes )
 
+    def collar_settings(self, shock, vibe, beep, duration):
+        for device in self.slave_devices:
+            self.devices.devices[ device ].collar_settings( shock, vibe, beep, duration )
+
+
+    def blowjob(self, wait, jobcount, punishment, delay):
+        for device in self.slave_devices:
+            self.devices.devices[ device ].blowjob( wait, jobcount, punishment, delay )
+

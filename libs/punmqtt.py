@@ -14,6 +14,7 @@ class PunMQTT(paho.Client):
             self.logger.debug('MQTT: Connection successfully established')
             self.subscribe('punisher/devices/+/response',0)
             self.subscribe('punisher/devices/+/available',0)
+            self.subscribe('punisher/devices/+/actionresponse',0)
             self.subscribe('$SYS/broker/uptime',0)
         elif rc == 1:
             self.logger.debug('MQTT: Connection successfully established')
@@ -77,6 +78,11 @@ class PunMQTT(paho.Client):
                if self.tdevice[ device ][ 'status' ] is not 'pending':
                    self.tdevice[ device ] = {'timestamp': int(time.time() + 120), 'status': 'online'}
 
+        if device[3] == "actionresponse":
+            device = str( device[2] )
+            if device in self.tdevice.keys():
+                answer = msg.payload.decode("utf-8")
+                self.devices.set_response( ddevice, answer )
 
     def on_publish(self, mqttc, obj, mid):
         self.logger.debug("MQTT - Published: "+str(mid))

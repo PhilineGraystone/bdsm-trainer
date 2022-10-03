@@ -67,6 +67,22 @@ class slaveprogram():
                     if len( self.program ) > 0:
                         self.program = self.program[1:]
 
+                if active == False and len( self.program ) > 0 and self.program[0][2] == "COLLAR_SETTINGS":
+                    print( "Change Collar Settings" )
+                    parameter = self.program[0][3].split('|')
+                    self.slave.collar_settings( parameter[0], parameter[1], parameter[2], parameter[3] )
+                    active = True
+                    if len( self.program ) > 0:
+                        self.program = self.program[1:]
+
+                if active == False and len( self.program ) > 0 and self.program[0][2] == "BLOWJOB_TRAINING":
+                    print( "Execute BLOWJOB TRAINING" )
+                    parameter = self.program[0][3].split('|')
+                    self.slave.collar_settings( parameter[0], parameter[1], parameter[2], parameter[3] )
+                    active = True
+                    if len( self.program ) > 0:
+                        self.program = self.program[1:]
+
                 if active == False and len( self.program ) > 0 and self.program[0][2] == "WAIT":
                     print( "Execute WAIT" )
                     self.nextaction = int( datetime.timestamp( datetime.now() ) ) + ( int( self.program[0][3] ) * 60 )
@@ -74,4 +90,6 @@ class slaveprogram():
                     if len( self.program ) > 0:
                         self.program = self.program[1:]
 
-            
+                if active == False and len( self.program ) > 0 and self.program[0][2] == "WAITEVENT":
+                    print( "Execute WAITEVENT" )
+
