@@ -1,0 +1,46 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+<!doctype html><html lang="{{ lang }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Punisher{% endblock %} · {{ _('Punisher Aufsicht') }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body>
+<header>
+  <span class="brand">{{ _('PUNISHER') }}</span>
+  <nav>
+    <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint=='dashboard' }}">{{ _('Live') }}</a>
+    <a href="{{ url_for('slaves') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('slave') }}">{{ _('Sklaven') }}</a>
+    <a href="{{ url_for('programs') }}" class="{{ 'active' if request.endpoint and (request.endpoint.startswith('program') or request.endpoint.startswith('step')) }}">{{ _('Programme') }}</a>
+    <a href="{{ url_for('devices') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('device') }}">{{ _('Geräte') }}</a>
+    {% if lb_enabled %}
+    <a href="{{ url_for('lb.logbook_view') }}" class="{{ 'active' if request.endpoint=='lb.logbook_view' }}">{{ _('Logbuch') }}</a>
+    <a href="{{ url_for('lb.leaderboard_view') }}" class="{{ 'active' if request.endpoint=='lb.leaderboard_view' }}">{{ _('Rangliste') }}</a>
+    <a href="{{ url_for('lb.weekly_view') }}" class="{{ 'active' if request.endpoint=='lb.weekly_view' }}">{{ _('Wochenplan') }}</a>
+    {% if day_enabled %}<a href="{{ url_for('lb.dayplans_view') }}" class="{{ 'active' if request.endpoint=='lb.dayplans_view' }}">{{ _('Tagesplan') }}</a>{% endif %}
+    <span class="menu"><a href="#" class="{{ 'active' if request.endpoint in ('lb.ranks_view','lb.scoring_view','lb.challenges_view','lb.rules_view','lb.budgets_view','lb.pauses_view','lb.streaks_view','lb.scenarios_view','lb.export_view','lb.routines_view','lb.routine_edit') }}">{{ _('Mehr ▾') }}</a>
+      <span class="dropdown">
+        <a href="{{ url_for('lb.challenges_view') }}">{{ _('Herausforderungen') }}</a>
+        {% if day_enabled %}<a href="{{ url_for('lb.rules_view') }}">{{ _('Belohnung und Bestrafung') }}</a>{% endif %}
+        {% if budgets_enabled %}<a href="{{ url_for('lb.budgets_view') }}">{{ _('Budgets') }}</a>{% endif %}
+        {% if pauses_enabled %}<a href="{{ url_for('lb.pauses_view') }}">{{ _('Pausen') }}</a>{% endif %}
+        {% if streaks_enabled %}<a href="{{ url_for('lb.streaks_view') }}">{{ _('Serien') }}</a>{% endif %}
+        {% if scenarios_enabled %}<a href="{{ url_for('lb.scenarios_view') }}">{{ _('Szenarien') }}</a>{% endif %}
+        {% if routines_enabled %}<a href="{{ url_for('lb.routines_view') }}">{{ _('Wellenformen') }}</a>{% endif %}
+        <a href="{{ url_for('lb.ranks_view') }}">{{ _('Ränge') }}</a>
+        <a href="{{ url_for('lb.scoring_view') }}">{{ _('Punktesystem') }}</a>
+        <a href="{{ url_for('lb.export_view') }}">{{ _('Export') }}</a>
+      </span></span>
+    {% endif %}
+    <a href="{{ url_for('audit_view') }}" class="{{ 'active' if request.endpoint=='audit_view' }}">{{ _('Protokoll') }}</a>
+  </nav>
+  <div class="right">
+    <span class="small lang">{% for code, label in langs %}{% if code != lang %}<a href="{{ lang_url(code) }}" title="{{ _('Sprache') }}">{{ label }}</a>{% else %}<b>{{ label }}</b>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+    <span class="small">{{ user }}</span>
+    <form method="post" action="{{ url_for('logout') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm">{{ _('Abmelden') }}</button></form>
+  </div>
+</header>
+<main>
+{% if db_pending %}<div class="flash error">{{ _('Datenbank liegt hinter dem Code: Migration(en) {v} fehlen. Die Zentrale spielt sie beim Start automatisch ein — oder von Hand: python3 libs/dbmigrate.py', v=db_pending|join(', ')) }}</div>{% endif %}
+{% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
+{% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body></html>

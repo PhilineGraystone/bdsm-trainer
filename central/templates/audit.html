@@ -1,0 +1,27 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Protokoll{% endblock %}
+{% block content %}
+<h1>{{ _('Ereignisprotokoll') }}</h1>
+<div class="panel"><form method="get" class="row">
+  <div><label>{{ _('Gerät (UUID-Anfang)') }}</label><input name="device" value="{{ f.device }}" class="mono"></div>
+  <div><label>{{ _('Aktion enthält') }}</label><input name="action" value="{{ f.action }}"></div>
+  <div><label>{{ _('Art') }}</label><select name="kind"><option value="">{{ _('alle') }}</option>{% for k in ['event','cmd','central','login','admin','emergency'] %}<option {{ 'selected' if f.kind==k }}>{{ k }}</option>{% endfor %}</select></div>
+  <div><label>{{ _('Quelle') }}</label><select name="source"><option value="">{{ _('alle') }}</option>{% for k in ['device','central','web'] %}<option {{ 'selected' if f.source==k }}>{{ k }}</option>{% endfor %}</select></div>
+  <div><label>{{ _('Sklaven-ID') }}</label><input name="slave" value="{{ f.slave }}"></div>
+  <div><label>{{ _('ab (JJJJ-MM-TT [HH:MM])') }}</label><input name="since" value="{{ f.since }}"></div>
+  <div style="align-self:end"><button class="primary" style="width:100%">{{ _('Filtern') }}</button></div>
+</form></div>
+<div class="panel"><table><thead><tr><th>{{ _('Zeit') }}</th><th>{{ _('Quelle/Art') }}</th><th>{{ _('Aktion') }}</th><th>{{ _('Gerät') }}</th><th>{{ _('Teiln.') }}</th><th>{{ _('Details') }}</th><th>{{ _('Benutzer') }}</th></tr></thead><tbody>
+{% for r in rows %}<tr>
+  <td class="small" style="white-space:nowrap">{{ r.al_ts|ts }}</td>
+  <td class="small">{{ r.al_source }}/{{ r.al_kind }}</td>
+  <td><b>{{ r.al_action }}</b></td>
+  <td class="small">{% if r.al_device %}{{ (names.get(r.al_device) or {}).get('dev_address') or '' }} <span class="mono muted">{{ r.al_device[:8] }}</span>{% endif %}</td>
+  <td class="small">{{ r.al_slave_id or '' }}</td>
+  <td class="mono small muted">{{ r.al_data|jsonpretty|truncate(140) }}</td>
+  <td class="small">{{ r.al_user or '' }}</td>
+</tr>{% else %}<tr><td colspan="7" class="muted">{{ _('Keine Einträge.') }}</td></tr>{% endfor %}
+</tbody></table>
+<p class="small">{% if page>1 %}<a href="{{ url_for('audit_view', page=page-1, **f) }}">{{ _('← neuer') }}</a>{% endif %} &nbsp;{{ _('Seite') }} {{ page }}&nbsp; {% if more %}<a href="{{ url_for('audit_view', page=page+1, **f) }}">{{ _('älter →') }}</a>{% endif %}</p>
+</div>
+{% endblock %}

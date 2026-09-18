@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later
+[Unit]
+Description=Punisher HDMI-Anzeige (pygame, KMS/DRM)
+After=network-online.target mosquitto.service
+PartOf=punisher.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=punisher
+SupplementaryGroups=video render input tty
+WorkingDirectory=/opt/punisher
+Environment=SDL_VIDEODRIVER=kmsdrm
+ExecStart=/usr/bin/python3 /opt/punisher/punisher-display.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=punisher.target

@@ -1,0 +1,186 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}{{ _('Gerät testen') }}{% endblock %}
+{% import '_collar.html' as coll %}
+{% block content %}
+<h1>{{ _('Gerät testen') }} <span class="muted" style="font-weight:400">{{ d.label or uuid[:8] }}</span>
+  <a class="btn right" href="{{ url_for('devices') }}">{{ _('Zurück zur Übersicht') }}</a></h1>
+
+<div class="panel">
+  <table><tbody>
+    <tr><td class="muted small">{{ _('device_UUID') }}</td><td class="mono">{{ uuid }}</td></tr>
+    <tr><td class="muted small">{{ _('Modell') }}</td><td>{{ model.name if model else (d.model or '–') }}
+      {% if d.hello and d.hello.fw_version %}<span class="small muted"> · {{ d.hello.fw_version }}</span>{% endif %}</td></tr>
+    <tr><td class="muted small">{{ _('Status') }}</td><td>
+      {% if d.online %}<span class="pill on">{{ d.state.state or 'online' }}</span>
+      {% else %}<span class="pill off">{{ _('offline') }}</span>{% endif %}
+      {% if d.age_s is not none %}<span class="small muted"> · {{ _('vor {n} s', n=d.age_s) }}</span>{% endif %}</td></tr>
+    {% if d.state %}<tr><td class="muted small">{{ _('meldet') }}</td><td class="small mono">{{ d.state|jsonpretty }}</td></tr>{% endif %}
+    {% if d.last_event %}<tr><td class="muted small">{{ _('letztes Ereignis') }}</td><td class="small">{{ d.last_event.event }}</td></tr>{% endif %}
+  </tbody></table>
+  <p style="margin:12px 0 0">
+    <form method="post" action="{{ url_for('device_cmd', uuid=uuid, action='identify') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm" {{ 'disabled' if not d.online }}>{{ _('Blinken') }}</button></form>
+    <form method="post" action="{{ url_for('device_cmd', uuid=uuid, action='stop') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm danger" {{ 'disabled' if not d.online }}>{{ _('Stopp') }}</button></form>
+  </p>
+</div>
+
+{# E-Stim bridge: which Coyote is attached to it, and which one it should be
+   permanently bound to. Without a binding it takes the first one that answers —
+   in the museum, with several devices within radio range, that is the wrong one. #}
+{% if d.online and d.state.coyote is defined %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Coyote an dieser Bridge') }}</h2>
+  <table><tbody>
+    <tr><td class="muted small">{{ _('verbunden') }}</td><td>
+      {% if d.state.ble %}<b>{{ d.state.coyote|upper }}</b> <span class="mono">{{ d.state.address }}</span>
+      {% else %}<span class="pill off">{{ _('keine Coyote') }}</span>{% endif %}</td></tr>
+    <tr><td class="muted small">{{ _('Zuordnung') }}</td><td>
+      {% if d.state.bound %}<span class="mono">{{ d.state.bound }}</span> <span class="pill on">{{ _('fest') }}</span>
+      {% else %}<span class="pill">{{ _('frei') }}</span> <span class="small muted">{{ _('nimmt die erste Coyote, die antwortet') }}</span>{% endif %}</td></tr>
+    <tr><td class="muted small">{{ _('Ausgabe') }}</td><td>{{ d.state.estim }} · A {{ d.state.a }} % · B {{ d.state.b }} %
+      <span class="small muted">· {{ _('Gerät meldet') }} {{ d.state.strength_a }}/{{ d.state.strength_b }}</span>
+      {% if d.state.peak_a or d.state.peak_b %}<br><span class="small muted">{{ _('Spitze des letzten Laufs') }}: A {{ d.state.peak_a }} % · B {{ d.state.peak_b }} %</span>{% endif %}</td></tr>
+    {# The ceiling of the slave is the ONLY upper limit on the pulse height
+       now that the bridge writes the strength itself (doc 28). That is why it
+       belongs visibly on the page, not just in the database. #}
+    <tr><td class="muted small">{{ _('Decke') }}</td><td>
+      {% if d.state.ceiling_a or d.state.ceiling_b %}A {{ d.state.ceiling_a }} % · B {{ d.state.ceiling_b }} %
+      <span class="small muted">{{ _('aus der Kalibrierung dem Sklaven — die Kurve fährt darunter') }}</span>
+      {% else %}<span class="pill act">{{ _('keine gesetzt') }}</span>
+      <span class="small muted">{{ _('ohne Decke gibt die Bridge nichts aus — die Kalibrierung steht bei dem Sklaven') }}</span>{% endif %}</td></tr>
+    {# This row used to read "the dial on the device is at 0, and that is fine
+       as it is". Now that we write the strength ourselves, it means the
+       opposite: our write has not arrived. #}
+    {% if d.state.no_strength %}
+    <tr><td class="muted small">{{ _('Achtung') }}</td><td><span class="pill err">{{ _('Stärke kommt am Gerät nicht an') }}</span>
+      <span class="small">{{ _('Die Bridge schreibt eine Stärke, das Gerät meldet trotzdem 0. Das ist ein Fehler, keine Erklärung — Verbindung, Generation und die Charakteristik PWM_AB2 prüfen.') }}</span></td></tr>
+    {% endif %}
+    {% if d.state.raw %}
+    <tr><td class="muted small">{{ _('Rohausgabe') }}</td><td><span class="pill warn">{{ _('läuft') }}</span>
+      {{ _('Kanal') }} {{ d.state.raw.channel|upper }} · X={{ d.state.raw.x }} Y={{ d.state.raw.y }} Z={{ d.state.raw.z }} ({{ d.state.raw.us }} µs) · {{ _('Stärke') }} {{ d.state.raw.strength }} % · {{ _('noch {n} s', n=d.state.raw.left_s) }}</td></tr>
+    {% endif %}
+  </tbody></table>
+  <p style="margin:12px 0 0">
+    {% if d.state.ble and d.state.address != d.state.bound %}
+    <form method="post" action="{{ url_for('device_coyote', uuid=uuid) }}" class="inline">
+      <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="bind">
+      <button class="primary">{{ _('Diese Coyote fest zuordnen') }}</button></form>
+    {% endif %}
+    {% if d.state.bound %}
+    <form method="post" action="{{ url_for('device_coyote', uuid=uuid) }}" class="inline">
+      <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="unbind">
+      <button class="sm">{{ _('Zuordnung lösen') }}</button></form>
+    {% endif %}
+  </p>
+  {# Raw output: the tool for the silent channel. It bypasses our whole
+     conversion and writes exactly the frame that the DG-LAB documentation
+     calls "100 Hz, 100 us". If it stays silent even then, the installation
+     is not the cause. #}
+  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+    <h3 style="font-size:14px;margin:0 0 4px">{{ _('Rohausgabe — für den stummen Kanal') }}</h3>
+    <p class="small muted" style="margin-top:0">{{ _('Schreibt Stärke und X/Y/Z unverändert an einen Kanal, ohne Wellenform, ohne Profil, ohne Umrechnung. Die Vorgabe 1/9/20 ist der Wert, den die Hersteller-Doku als 100 Hz mit 100 µs Impulsbreite nennt — der volle Ausschlag ihrer eigenen Beispiele. Kommt DABEI nichts an, liegt es nicht an der Anlage: dann sitzen die Elektroden nicht, oder der Kanal ist ein anderer.') }}</p>
+    <p class="small" style="margin-top:0"><b>{{ _('Damit tastet man sich an die Stärke heran') }}</b> — {{ _('niedrig anfangen, langsam erhöhen, und die Zahl, bei der Schluss ist, bei dem Sklaven als Kalibrierung eintragen. Sie ist die einzige Obergrenze, die danach gilt.') }}</p>
+    <form method="post" action="{{ url_for('device_coyote', uuid=uuid) }}" class="row" style="align-items:flex-end">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div style="max-width:8em"><label>{{ _('Kanal') }}</label><select name="channel"><option value="a">A</option><option value="b">B</option></select></div>
+      <div style="max-width:7em"><label>{{ _('Stärke %') }}</label><input type="number" name="strength" value="10" min="0" max="100" required></div>
+      <div style="max-width:6em"><label>X</label><input type="number" name="x" value="1" min="0" max="31"></div>
+      <div style="max-width:6em"><label>Y</label><input type="number" name="y" value="9" min="0" max="1023"></div>
+      <div style="max-width:6em"><label>Z</label><input type="number" name="z" value="20" min="0" max="20"></div>
+      <div style="max-width:7em"><label>{{ _('Sekunden') }}</label><input type="number" name="seconds" value="5" min="1" max="30"></div>
+      <div style="flex:0 0 auto"><button name="op" value="raw" class="danger"
+        onclick="return confirm('{{ _('Das gibt wirklich aus. Fortfahren?') }}')">{{ _('Rohausgabe starten') }}</button>
+        <button name="op" value="raw_stop" class="sm">{{ _('Stopp') }}</button></div>
+    </form>
+  </div>
+
+  <form method="post" action="{{ url_for('device_coyote', uuid=uuid) }}" style="margin-top:10px">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="bind">
+    <label for="mac">{{ _('oder eine MAC von Hand') }}</label>
+    <input type="text" name="address" id="mac" placeholder="aa:bb:cc:dd:ee:ff" pattern="[0-9A-Fa-f:]{17}"
+           style="max-width:16em" value="{{ d.state.bound or '' }}">
+    <button class="sm">{{ _('Übernehmen') }}</button>
+    <p class="small muted" style="margin:.3em 0 0">{{ _('Nützlich, wenn die gewünschte Coyote gerade aus ist. Die Bridge trennt eine bestehende Verbindung sofort und sucht neu.') }}</p>
+  </form>
+</div>
+{% endif %}
+
+{# Collar: what the device sees right now. Sits above the envelope, because
+   when checking, the question "what is it doing right now" comes first and
+   "what is it allowed to do" second. #}
+{% if d.online and d.state.cond is defined %}{{ coll.collar_panel(d.state) }}{% endif %}
+
+{% if envelope %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Hüllkurve dieses Geräts') }}
+    {% if reported %}<span class="pill on" title="{{ _('von der laufenden Firmware gemeldet') }}">{{ _('gemeldet') }}</span>
+    {% else %}<span class="pill" title="{{ _('aus dem Modellkatalog; die Firmware meldet ihre Grenzen noch nicht') }}">{{ _('aus dem Katalog') }}</span>{% endif %}</h2>
+  <p class="small muted" style="margin-top:0">{{ _('Was dieses Gerät höchstens durchlässt. Die Felder unten sind darauf begrenzt — ein größerer Wert würde vom Gerät still gekappt oder abgelehnt.') }}</p>
+  <table><tbody>
+  {% for k, v in envelope|dictsort %}<tr><td class="muted small">{{ _(envelope_keys.get(k, k)) }} <span class="mono small">{{ k }}</span></td>
+    {# A tier scale (pun_lvl) is a list, not a number — otherwise the Python
+       spelling of a tuple would show up in this place. #}
+    <td><b>{{ v|join(' · ') if v is sequence and v is not string else v }}</b></td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endif %}
+
+{% if not d.online %}
+  <div class="panel" style="border-color:var(--warn)"><p style="margin:0">{{ _('Das Gerät ist offline — es lässt sich nichts auslösen.') }}</p></div>
+{% elif not acts %}
+  <div class="panel"><p class="muted" style="margin:0">{{ _('Dieses Gerät meldet keine Fähigkeit, zu der es eine Aktion gibt.') }}</p></div>
+{% else %}
+
+<div class="panel" style="border-color:var(--warn)">
+  <p style="margin:0"><b>{{ _('Was hier ausgelöst wird, wirkt sofort und wirklich.') }}</b>
+  {{ _('Es zählt aber nicht: kein Durchgang, keine Note, keine Punkte, keine Bestrafung. Im Protokoll steht es trotzdem — eine von Hand ausgelöste körperliche Wirkung gehört nachvollziehbar.') }}</p>
+</div>
+
+{% for a in acts %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ a.name }}
+    <span class="small muted mono">{{ a.code }}</span>
+    {% if a.physical %}<span class="pill warn">{{ _('wirkt körperlich') }}</span>{% endif %}
+    {% if a.blocking %}<span class="pill">{{ _('wartet auf Ergebnis') }}</span>{% endif %}
+  </h2>
+  <p class="small muted" style="margin-top:0">{{ a.description }}</p>
+  <form method="post"{% if a.physical %} onsubmit="return confirm('{{ _('Am Gerät löst das wirklich aus. Fortfahren?') }}')"{% endif %}>
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="{{ a.code }}">
+    <div class="grid">
+    {% for p in a.params %}
+      <div>
+        <label for="f_{{ a.code }}_{{ p.name }}">{{ p.label or p.name }}
+          <span class="small muted mono">{{ p.name }}</span>
+          {% if p.unit %}<span class="small muted">· {{ p.unit }}</span>{% endif %}
+        </label>
+        {% if p.ref %}
+          {# A picker instead of a number field: the list shows only what fits
+             this parameter — the same restriction that the server checks. #}
+          <select name="p_{{ p.name }}" id="f_{{ a.code }}_{{ p.name }}">
+            {% if not p.required %}<option value="0">{{ _('— keine —') }}</option>{% endif %}
+            {% for r in refs.get(p.ref, []) %}<option value="{{ r.id }}"{{ ' selected' if p.required and loop.first }}>{{ r.name }}</option>{% endfor %}
+          </select>
+          {% if not refs.get(p.ref) %}<p class="small" style="color:var(--warn);margin:.2em 0 0">{{ _('Keine passende Wellenform vorhanden — erst eine anlegen.') }}</p>{% endif %}
+        {% else %}
+          <input type="{{ 'text' if p.is_text else 'number' }}" name="p_{{ p.name }}"
+                 id="f_{{ a.code }}_{{ p.name }}"
+                 {% if p.min is not none %}min="{{ p.min }}"{% endif %}
+                 {% if p.max is not none %}max="{{ p.max }}"{% endif %}
+                 value="{{ p.value }}"{{ ' required' if p.required }}>
+        {% endif %}
+        <p class="small muted" style="margin:.2em 0 0">{{ p.description }}
+          {% if p.min is not none and p.max is not none %}<span class="mono">({{ p.min }}–{{ p.max }})</span>{% endif %}
+          {% if p.capped %}<br><span style="color:var(--warn)">{{ _('Dieses Gerät lässt höchstens {n} durch', n=p.max) }}{% if p.unit %} {{ p.unit }}{% endif %}{% if p.registry_max %} — {{ _('die Anlage kennt bis {n}', n=p.registry_max) }}{% endif %}.</span>{% endif %}</p>
+      </div>
+    {% else %}
+      <div><p class="small muted">{{ _('Diese Aktion hat keine Parameter.') }}</p></div>
+    {% endfor %}
+    </div>
+    <p style="margin:12px 0 0"><button class="primary">{{ _('Auslösen') }}</button></p>
+  </form>
+</div>
+{% endfor %}
+{% endif %}
+
+<p class="small muted">{{ _('Die Liste kommt aus der Aktions-Registry im Code und ist auf das gefiltert, was die laufende Firmware dieses Geräts meldet. Ein neues Gerätemodell erscheint hier von selbst — es gibt keine zweite Liste, die veralten könnte.') }}</p>
+{% endblock %}

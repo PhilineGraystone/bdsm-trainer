@@ -1,0 +1,78 @@
+# Punisher — was nie in ein Repository gehoert
+#
+# Diese Datei ist die zweite Verteidigungslinie. Die erste ist
+# tools/release_scrub.py, das einen gesaeuberten Stand herstellt und abbricht,
+# wenn etwas uebrig bleibt. Was hier steht, soll auch dann nicht mitgehen, wenn
+# jemand von Hand in einem Arbeitsbaum committet.
+
+# --- Zugangsdaten und oertliche Konfiguration -------------------------------
+config/config.ini
+central/config/config.ini
+tools/scrub_rules.local.txt
+*.local.txt
+*.local.ini
+
+# --- Personenbezogenes ------------------------------------------------------
+# Fotos der Teilnehmerinnen. Ein Bild, das einmal in einer Git-Historie liegt,
+# bekommt man daraus nicht mehr heraus.
+pics/slaves/*
+central/pics/slaves/*
+!pics/slaves/.keep
+!central/pics/slaves/.keep
+pics/grades/*
+central/pics/grades/*
+!pics/grades/.keep
+!central/pics/grades/.keep
+
+# --- Die Mobil-App ----------------------------------------------------------
+# Bleibt vorerst draussen (Entscheidung 14.09.2026): sie steht auf 1.1,
+# spricht den 2.0-Vertrag nicht und wird erst angefasst, wenn die fehlenden
+# Geraete fertig sind. Jetzt veroeffentlicht waere sie ein Gegenueber, das
+# die Anlage abweisen wuerde.
+android/
+
+# --- Interne Arbeitspapiere -------------------------------------------------
+# Eine README geht nach draussen: die oben, auf Englisch. Die uebrigen sind
+# Arbeitspapiere dieser Anlage — deutsch, an den gerichtet, der sie betreibt,
+# und voller Einzelheiten, die nur mit der Hardware davor einen Sinn ergeben
+# (Entscheidung Philine, 14.09.2026).
+central/doc/
+firmware/PunisherDevice/examples/*/README.md
+firmware/PunisherDevice/examples/*/*/README.md
+android/PunisherApp/README.md
+
+# --- Laufzeit ---------------------------------------------------------------
+logs/*
+central/logs/*
+!logs/.keep
+!central/logs/.keep
+*.log
+*.sql.gz
+*.dump
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+
+# --- Arduino / PlatformIO ---------------------------------------------------
+.pio/
+build/
+*.bin
+*.elf
+*.map
+
+# --- Werkzeuge und Betriebssystem -------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.orig
+*.rej
+*-review.patch

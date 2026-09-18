@@ -1,0 +1,106 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Gerät{% endblock %}
+{% block content %}
+<h1>{{ _('Neues Gerät') if is_new else _('Gerät bearbeiten') }}</h1>
+<div class="panel" style="max-width:640px"><form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}">
+  <label>{{ _('device_UUID (MQTT-Topic-Segment, aus dem hello des Geräts)') }}</label><input name="dev_name" class="mono" value="{{ row.dev_name if row else '' }}" required maxlength="60">
+  <label>{{ _('Modell') }}</label><select name="dev_model">{% for m in models %}<option value="{{ m.code }}" {{ 'selected' if row and row.dev_model==m.code }}>{{ m.name }} ({{ m.code }})</option>{% endfor %}</select>
+  <label>{{ _('Funktionen dieses Modells') }} <span class="muted small">{{ _('— sie bestimmen, welche Programmschritte und Wochenaufgaben mit dem Gerät möglich sind') }}</span></label>
+  {% for m in models %}<div class="caps modelcaps" data-code="{{ m.code }}" hidden>{% for c in cap_list(m.capabilities) %}<span class="cap" title="{{ c[0] }} — {{ c[2] }}">{{ c[1] }}</span>{% endfor %}</div>{% endfor %}
+  <label>{{ _('Bezeichnung (frei, z. B. „Halsband 1“ oder Client-ID)') }}</label><input name="dev_address" value="{{ row.dev_address if row else '' }}" maxlength="60">
+  {# The MAC is shown, not entered. It comes out of the signed hello of the
+     device; an input field would be a place where a wrong one could be typed
+     in, and the whole point of the derived UUID is that the two cannot drift
+     apart. #}
+  {% if row and row.dev_mac %}<p class="small muted" style="margin:14px 0 0">
+    {{ _('efuse-MAC:') }} <span class="mono">{{ row.dev_mac }}</span>{% if row.dev_chip %} · {{ row.dev_chip }}{% endif %}<br>
+    {% if is_new %}{{ _('Kommt aus der Meldung des Geräts und wird mit gespeichert — aus ihr ist die device_UUID abgeleitet.') }}
+    {% else %}{{ _('Aus ihr ist die device_UUID abgeleitet. Meldet sich unter dieser Adresse ein anderer Chip, wird das Gerät gesperrt statt still übernommen.') }}{% endif %}</p>{% endif %}
+  <p style="margin-top:16px"><button class="primary">{{ _('Speichern') }}</button> <a class="btn" href="{{ url_for('devices') }}">{{ _('Abbrechen') }}</a></p>
+</form></div>
+{% if not is_new %}
+{# SETTINGS FROM THE SCHEMA (doc 42 point 5). Every field here comes out of
+   devicemodels.SETTINGS — nothing is typed into this template per device.
+   A new model needs a schema entry, not HTML. The bounds are the compiled
+   ceilings of the sketch; the form can only tighten. #}
+{% if settings %}
+<div class="panel" style="max-width:640px" id="einstellungen">
+  <h2 style="margin-top:0">{{ _('Geräteeinstellungen') }}</h2>
+  <p class="small muted" style="margin:0 0 10px">{{ _('Gespeichert im Gerät, gültig ab seinem nächsten Start. Leer = Vorgabe des Geräts. Die Grenzen sind die gebauten Obergrenzen — enger geht, weiter nicht.') }}</p>
+  {% if config_response %}
+    {% set cr = config_response %}
+    <p class="small" style="margin:0 0 10px">
+      {% if cr.stored %}<span class="pill on">{{ _('gespeichert: {k}', k=cr.stored|join(', ')) }}</span>{% endif %}
+      {% if cr.refused %}<span class="pill off">{{ _('abgewiesen: {k}', k=cr.refused|join(', ')) }}</span>{% endif %}
+      {% if cr.restart == 'yes' %}<span class="pill act">{{ _('Gerät startet neu') }}</span>
+      {% elif cr.restart and cr.restart != 'no' %}<span class="pill warn">{{ cr.restart }}</span>{% endif %}
+    </p>
+  {% endif %}
+  <form method="post" action="{{ url_for('device_config', did=row.dev_id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}">
+  <table class="small"><tbody>
+  {% for st in settings %}<tr>
+    <td style="width:40%"><label for="cfg_{{ st.key }}">{{ _(st.label) }}</label>
+      {% if st.help %}<br><span class="muted">{{ _(st.help) }}</span>{% endif %}
+      <br><span class="mono muted">{{ st.key }}</span></td>
+    <td>
+      {% if st.type.__name__ == 'int' %}
+        <input type="number" id="cfg_{{ st.key }}" name="{{ st.key }}" min="{{ st.min }}" max="{{ st.max }}" step="1"
+               value="{{ current[st.key] if st.key in current else '' }}" placeholder="{{ st.default }}" style="width:9em">
+        {% if st.unit %} {{ st.unit }}{% endif %}
+        <span class="muted"> {{ st.min }}..{{ st.max }}{% if st.key not in current %} · {{ _('nicht gemeldet, Vorgabe {d}', d=st.default) }}{% endif %}</span>
+      {% else %}
+        <input type="text" id="cfg_{{ st.key }}" name="{{ st.key }}" maxlength="{{ st.max }}"
+               value="{{ current[st.key] if st.key in current else '' }}" placeholder="{{ st.default or '–' }}" class="mono" style="width:14em">
+      {% endif %}
+    </td></tr>{% endfor %}
+  </tbody></table>
+  <p style="margin:10px 0 0"><label class="small"><input type="checkbox" name="restart" value="1"> {{ _('Gerät danach neu starten (nur im Leerlauf möglich)') }}</label></p>
+  <p style="margin:10px 0 0"><button class="primary">{{ _('An das Gerät senden') }}</button></p>
+  </form>
+</div>
+{% endif %}
+{# STARTS AND CRASHES (doc 42 point 1). Every start the device reported, with
+   the reason the chip gives and what the previous life left behind. The
+   columns about the previous life are empty when the device lost its RTC
+   memory (power cut) — empty, not zero. A restart the device did not choose
+   is marked; that is the line one comes here for. #}
+<div class="panel" style="max-width:640px">
+  <h2 style="margin-top:0"><span class="health {{ health.colour if health else 'red' }}"></span>{{ _('Zustand') }}</h2>
+  {% if health and health.red %}<ul class="health-list" style="margin:0">{% for k, t, m in health.reasons %}<li>{{ t }}{% if health.ackable(k) %} <form method="post" action="{{ url_for('device_ack', uuid=uuid) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ k }}"><button class="sm" title="{{ _('Zur Kenntnis genommen — bis sich der Inhalt ändert') }}">{{ _('quittieren') }}</button></form>{% endif %}</li>{% endfor %}</ul>
+  {% elif health %}<p class="muted small" style="margin:0">{{ _('alles in Ordnung') }}</p>
+  {% else %}<p class="muted small" style="margin:0">{{ _('offline') }}</p>{% endif %}
+</div>
+<div class="panel" style="max-width:640px">
+  <h2 style="margin-top:0">{{ _('Neustarts') }}</h2>
+  {% if boots_today %}
+    <p style="margin:0 0 10px">{{ _('Heute:') }}
+      {% for b in boots_today %}<span class="pill {{ 'warn' if b.reason not in ('poweron','software','external','deepsleep') else '' }}">{{ b.n }}× {{ b.reason }}</span> {% endfor %}
+    </p>
+  {% elif boots %}
+    <p class="muted small" style="margin:0 0 10px">{{ _('Heute kein Neustart.') }}</p>
+  {% endif %}
+  {% if boots %}
+  <table class="small"><thead><tr><th>{{ _('Wann') }}</th><th>{{ _('Grund') }}</th><th>{{ _('Lief davor') }}</th><th>{{ _('Letztes Kommando') }}</th><th>{{ _('Letzter Fehler') }}</th><th>{{ _('Firmware') }}</th></tr></thead><tbody>
+  {% for b in boots %}<tr>
+    <td class="mono">{{ b.db_seen.strftime('%d.%m. %H:%M:%S') }}</td>
+    <td>{% if b.db_reason in ('poweron','software','external','deepsleep') %}{{ b.db_reason }}{% else %}<span class="pill warn">{{ b.db_reason }}</span>{% endif %}</td>
+    <td>{% if b.db_uptime_s is not none %}{{ (b.db_uptime_s // 3600) }}:{{ '%02d' % ((b.db_uptime_s // 60) % 60) }}:{{ '%02d' % (b.db_uptime_s % 60) }}{% else %}<span class="muted">{{ _('unbekannt') }}</span>{% endif %}</td>
+    <td class="mono">{{ b.db_last_cmd or '' }}</td>
+    <td class="small">{{ b.db_last_err or '' }}</td>
+    <td class="mono small">{{ b.db_fw_name }} {{ b.db_fw_sketch }}</td>
+  </tr>{% endfor %}
+  </tbody></table>
+  {% else %}
+  <p class="muted small" style="margin:0">{{ _('Noch kein Start gemeldet — eine Firmware ab 2.2.0 meldet jeden Start mit Grund.') }}</p>
+  {% endif %}
+</div>
+<div class="panel" style="max-width:640px"><form method="post" action="{{ url_for('device_delete', did=row.dev_id) }}" onsubmit="return confirm('Gerät löschen?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="danger">{{ _('Gerät löschen') }}</button> <span class="small muted">{{ _('nur möglich, wenn es keinem Sklaven zugeordnet ist.') }}</span></form></div>{% endif %}
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+  var sel = document.querySelector('select[name=dev_model]');
+  var blocks = document.querySelectorAll('.modelcaps');
+  function upd(){ blocks.forEach(function(b){ b.hidden = (b.dataset.code !== sel.value); }); }
+  sel.addEventListener('change', upd); upd();
+})();
+</script>{% endblock %}

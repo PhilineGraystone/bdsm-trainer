@@ -1,0 +1,47 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Geräte{% endblock %}
+{% block content %}
+<h1>{{ _('Geräte') }} <a class="btn right" href="{{ url_for('device_edit') }}">{{ _('+ Neu') }}</a></h1>
+{% macro caplist(list) %}<div class="caps">{% for c in list %}<span class="cap {{ c.state }}" title="{{ c.code }} — {{ c.long }}{% if c.state=='miss' %} · {{ _('die laufende Firmware meldet diese Funktion NICHT') }}{% elif c.state=='extra' %} · {{ _('meldet die Firmware zusätzlich (Registry älter als die Firmware) — wird NICHT genutzt') }}{% elif c.state=='degraded' %} · {{ _('heute nicht nutzbar: die tragende Komponente ist abgemeldet') }}{% endif %}">{{ c.short }}</span>{% endfor %}</div>{% endmacro %}
+{% if unknown %}<div class="panel" style="border-color:var(--warn)"><h2 style="margin-top:0;color:var(--warn)">{{ _('Online, aber nicht angelegt') }}</h2>
+<table><tbody>{% for d in unknown %}<tr><td class="mono">{{ d.uuid }}</td><td>{{ d.model }}</td><td>{{ caplist(d.caps) }}</td><td class="small muted">{{ d.hello.fw_version }}{% if d.state.ip %} · {{ d.state.ip }}{% endif %}</td><td><a class="btn sm" href="{{ url_for('device_edit', uuid=d.uuid) }}">{{ _('Anlegen') }}</a></td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if sightings %}<div class="panel" style="border-color:var(--warn)">
+<h2 style="margin-top:0;color:var(--warn)">{{ _('Gemeldet, aber keinem Gerät zugeordnet') }}</h2>
+<p class="small muted">{{ _('Diese Geräte haben sich mit einer MAC gemeldet, die in keinem Eintrag steht. Sie werden NICHT von selbst aufgenommen — so wie ein unbekannter RFID-Tag auch nicht von selbst zu einem Sklave wird. Wer dazugehört, wird hier bewusst angelegt.') }}</p>
+<table><thead><tr><th>{{ _('MAC') }}</th><th>{{ _('Chip') }}</th><th>{{ _('device_UUID') }}</th><th>{{ _('Firmware') }}</th><th>{{ _('zuletzt') }}</th><th></th></tr></thead><tbody>
+{% for s in sightings %}<tr>
+  <td class="mono">{{ s.ds_mac }}</td><td>{{ s.ds_chip }}</td>
+  <td class="mono small">{{ s.ds_uuid }}</td><td class="small muted">{{ s.ds_fw_name }}</td>
+  <td class="small muted">{{ s.ds_last }} · {{ s.ds_count }}×</td>
+  <td><a class="btn sm" href="{{ url_for('device_edit') }}?uuid={{ s.ds_uuid }}&mac={{ s.ds_mac }}">{{ _('Anlegen') }}</a></td>
+</tr>{% endfor %}</tbody></table></div>{% endif %}
+
+<div class="panel"><table><thead><tr><th>{{ _('Gerät') }}</th><th>{{ _('device_UUID') }}</th><th>{{ _('Modell') }}</th><th>{{ _('Funktionen') }}</th><th>Status</th><th>{{ _('Teiln.') }}</th><th></th></tr></thead><tbody>
+{% for r in rows %}{% set o = online.get(r.dev_name) %}<tr>
+  <td>{% if o %}<span class="health {{ o.health.colour }}" title="{{ o.health.text() if o.health.red else _('alles in Ordnung') }}"></span>{% else %}<span class="health red" title="{{ _('offline') }}"></span>{% endif %}<b>{{ r.dev_address or '–' }}</b>
+      {% if o and o.health.red %}<ul class="health-list">{% for k, t, m in o.health.reasons %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}{% if o and o.health.acked %}<ul class="health-list muted">{% for k, t, m, by, at in o.health.acked %}<li>{{ t }} <span class="small">({{ _('quittiert') }})</span></li>{% endfor %}</ul>{% endif %}</td><td class="mono">{{ r.dev_name }}</td>
+  <td>{{ r.model_name or r.dev_model }}
+      {% if r.dev_fw_sketch or r.dev_fw_framework %}<br><span class="small muted">{{ r.dev_fw_name or '?' }} {{ r.dev_fw_sketch or '?' }} · lib {{ r.dev_fw_framework or '?' }}</span>
+      {% elif o and o.hello.fw_version %}<br><span class="small muted">{{ o.hello.fw_version }}</span>{% endif %}
+      {% if r.dev_mac %}<br><span class="small mono muted" title="{{ _('efuse-MAC des Chips — daraus wird die device_UUID abgeleitet') }}">{{ r.dev_mac }}{% if r.dev_chip %} · {{ r.dev_chip }}{% endif %}
+        {% if r.dev_mac_locked %}<span class="pill on" title="{{ _('die Schreibsperre der MAC ist gebrannt') }}">{{ _('fest') }}</span>{% endif %}</span>{% endif %}</td>
+  <td>{% if r.caps %}{{ caplist(r.caps) }}{% else %}<span class="muted small">{{ _('Modell „{m}“ unbekannt', m=r.dev_model) }}</span>{% endif %}</td>
+  <td>{% if r.dev_blocked %}<span class="pill off" style="background:var(--bad)" title="{{ r.dev_blocked }}">{{ _('gesperrt') }}</span>
+      <br><span class="small" style="color:var(--bad)">{{ r.dev_blocked }}</span>
+      {% elif o and o.online %}<span class="pill on">{{ o.state.state or 'online' }}</span>{% else %}<span class="pill off">{{ _('offline') }}</span>{% endif %}</td>
+  <td>{{ r.n_slaves }}</td>
+  <td class="actions">{% if o and o.online %}<a class="btn sm" href="{{ url_for('device_test', uuid=r.dev_name) }}">{{ _('Testen') }}</a> {% endif %}<a class="btn sm" href="{{ url_for('device_edit', did=r.dev_id) }}">{{ _('Bearbeiten') }}</a></td>
+</tr>{% else %}<tr><td colspan="7" class="muted">{{ _('Keine Geräte angelegt.') }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if rejected %}
+{# Not a device but a hint: whatever appears in this place did NOT pass the
+   check and is therefore listed nowhere as a device. The UUID comes from the
+   topic and is merely claimed, never verified — hence no button beside it. #}
+<p class="small" style="color:var(--warn)">
+  {{ _('Abgewiesen, nicht angezeigt:') }}
+  {% for r in rejected %}<span class="mono">{{ r.uuid[:8] }}</span> ({{ r.why }}{% if r.n > 1 %}, {{ r.n }}×{% endif %}){% if not loop.last %} · {% endif %}{% endfor %}
+  <br><span class="muted">{{ _('Meist eine Firmware unter 2.0 oder ein anderer Projektschlüssel. Solche Geräte werden nicht als Gerät geführt — der Grund steht im Protokoll.') }}</span>
+</p>
+{% endif %}
+<p class="small muted">{{ _('Modelle und Fähigkeiten sind Code (') }}<span class="mono">libs/devicemodels.py</span>{{ _('); in der Datenbank steht nur, welches physische Gerät welches Modell hat. Die Funktionen bestimmen, welche Programmschritte und Wochenaufgaben mit diesem Gerät überhaupt möglich sind. Ist ein Gerät online, wird die Liste mit dem verglichen, was seine Firmware meldet:') }} <span class="cap miss">{{ _('rot') }}</span> {{ _('= das Modell kann es, die Firmware meldet es nicht (zu alte Firmware),') }} <span class="cap extra">{{ _('blau') }}</span> {{ _('= die Firmware kann mehr, als die Registry kennt.') }}</p>
+{% endblock %}

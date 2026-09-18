@@ -1,0 +1,44 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{# Findings from libs/programcheck.py — where the program fails to fit the devices.
+   One template for all three places (slave, program, assignment), so that
+   the same thing does not stand there worded three ways. #}
+{% macro finding_line(f) -%}
+  {%- if f.kind == 'invalid' -%}
+    <b>{{ _('Schritt {n}', n=f.step) }} {{ f.code }}</b> —
+    <span style="color:var(--err)">{{ _('geht so nicht mehr durch die Anlage') }}</span>:
+    <span class="small mono">{{ f.reason }}</span>
+  {%- elif f.kind == 'no_capability' -%}
+    <b>{{ _('Schritt {n}', n=f.step) }} {{ f.action.name }}</b> —
+    <span style="color:var(--err)">{{ _('kein zugeordnetes Gerät kann das') }}</span>
+    <span class="small muted mono">{{ f.capability }}</span>
+  {%- elif f.kind == 'overflow' -%}
+    <b>{{ _('Schritt {n}', n=f.step) }} {{ f.action.name }}</b> —
+    {{ f.param.label or f.param.name }}
+    <span style="color:var(--warn)">{{ f.wanted }}{% if f.param.unit %}&nbsp;{{ f.param.unit }}{% endif %}</span>{{ ',' }}
+    {{ _('durchgelassen werden {n}', n=f.allowed) }}{% if f.param.unit %}&nbsp;{{ f.param.unit }}{% endif -%}
+    <span class="small muted"> ({{ f.devices }})</span>
+  {%- elif f.kind == 'too_few' -%}
+    <b>{{ _('Schritt {n}', n=f.step) }} {{ f.action.name }}</b> —
+    <span style="color:var(--err)">{{ _('braucht {w} Fesseln, das Gerät hat {h}', w=f.wanted, h=f.have) }}</span>
+    <span class="small muted">({{ f.devices }})</span>
+  {%- elif f.kind == 'no_calibration' -%}
+    <b>{{ _('Schritt {n}', n=f.step) }} {{ f.action.name }}</b> —
+    {# Two very unlike consequences under one name: the trainer learns on its own
+       at the start and carries on, the bridge emits nothing at all without a
+       ceiling. That has to be tellable apart at first glance (doc 28). #}
+    {% if f.blocking %}<span style="color:var(--err)">{{ _('Kalibrierung fehlt — der Schritt gibt nichts aus') }}</span>
+    {% else %}{{ _('Kalibrierung fehlt — es gelten die Gerätevorgaben') }}{% endif %}
+    <span class="small muted mono">{{ f.poses|join(', ') }}</span>
+    <span class="small muted">({{ f.devices }})</span>
+  {%- else -%}
+    <b>{{ _('Schritt {n}', n=f.step) }} {{ f.action.name if f.action else f.code }}</b> —
+    {{ _('das Gerät hat sich nie gemeldet') }}
+    <span class="small muted">({{ f.devices }})</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro finding_list(findings) %}
+<ul class="small" style="margin:.3em 0 0;padding-left:1.2em">
+  {% for f in findings %}<li style="margin:.15em 0">{{ finding_line(f) }}</li>{% endfor %}
+</ul>
+{% endmacro %}

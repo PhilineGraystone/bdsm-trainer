@@ -1,0 +1,29 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}{{ _('Sklaven') }}{% endblock %}
+{% block content %}
+<h1>{{ _('Sklaven') }} <a class="btn right" href="{{ url_for('slave_edit') }}">+ {{ _('Neu') }}</a></h1>
+{# The note disappears on its own as soon as the tag belongs to a slave
+   (see _unknown_rfid). Dismissing is for the tag that should belong to nobody
+   — a stranger's badge, a card out of the drawer. #}
+{% if snap.last_unknown_rfid %}<div class="flash warn">{{ _('Zuletzt unbekannter Tag an der Zentrale:') }} <span class="mono">{{ snap.last_unknown_rfid.rfid }}</span> ({{ snap.last_unknown_rfid.ts_ms|ts }}) — <a href="{{ url_for('slave_edit') }}">{{ _('als Sklaven anlegen') }}</a>
+  <form method="post" action="{{ url_for('unknown_rfid_dismiss') }}" class="inline" style="margin-left:.6em">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <button class="sm" title="{{ _('Der Tag soll niemandem gehören — Merker wegräumen.') }}">{{ _('verwerfen') }}</button></form>
+</div>{% endif %}
+<div class="panel"><table><thead><tr><th>{{ _('Name') }}</th><th>{{ _('RFID') }}</th><th>{{ _('Aktives Programm') }}</th><th>{{ _('Programme') }}</th><th>{{ _('Geräte') }}</th><th>{{ _('Passt') }}</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr>
+  <td><a href="{{ url_for('slave_detail', sid=r.slave_id) }}"><b>{{ r.slave_name }}</b></a> <span class="muted small">#{{ r.slave_id }}</span></td>
+  <td class="mono">{{ r.slave_rfid }}</td>
+  <td>{% if r.pro_name %}{{ r.pro_name }}{% else %}<span class="pill act">{{ _('keins') }}</span>{% endif %}</td>
+  <td>{{ r.n_prog }}</td><td>{{ r.n_dev }}</td>
+  {# Flag: does the program fit the devices? Otherwise the supervisor would have
+     to open every page one by one to see it (doc 24). The second number is that
+     of the ACTIVE program — it runs today and weighs more heavily. #}
+  <td>{% if r.findings[0] %}<a href="{{ url_for('slave_detail', sid=r.slave_id) }}"
+        class="pill warn" title="{{ _('{n} Stellen, an denen das Programm nicht zu den Geräten passt', n=r.findings[0]) }}"
+        >{{ r.findings[0] }}{% if r.findings[1] %} · {{ _('{n} aktiv', n=r.findings[1]) }}{% endif %}</a>
+      {% else %}<span class="pill on">{{ _('ja') }}</span>{% endif %}</td>
+  <td class="actions"><a class="btn sm" href="{{ url_for('slave_detail', sid=r.slave_id) }}">{{ _('Zuordnen') }}</a> <a class="btn sm" href="{{ url_for('slave_edit', sid=r.slave_id) }}">{{ _('Bearbeiten') }}</a></td>
+</tr>{% else %}<tr><td colspan="7" class="muted">{{ _('Noch keine Sklaven.') }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

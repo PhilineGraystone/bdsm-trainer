@@ -1,0 +1,144 @@
+# Punisher — Zugriffsliste des Brokers (2.1.1)
+#
+# WOZU DIESE DATEI DA IST
+#
+# Die Signatur beweist: "Jemand gehoert zum Projekt." Sie beweist NICHT: "Diese
+# Nachricht kommt von der Stelle, die sie schicken darf." Web, Zentrale und
+# jedes Geraet teilen denselben Projektschluessel, also kann ein
+# kompromittiertes Geraet ein gueltig signiertes `punisher/central/request`
+# erzeugen — und das endet in logbook.punish(), auf Haut (Befund Philine
+# 2026-09-15, Doc 39 Punkt 4).
+#
+# Der ReplayGuard in der Zentrale faengt die WIEDERHOLUNG. Er faengt nicht den
+# ersten Versuch. Diese Datei tut das: sie nimmt Geraeten das Schreibrecht auf
+# dem Steuerpfad ueberhaupt, im Broker, bevor eine Nachricht die Zentrale
+# erreicht.
+#
+# WAS SIE NICHT LEISTET
+#
+# Alle Geraete teilen ein Konto. Ein kompromittiertes Geraet kann deshalb
+# weiterhin den Zustand eines ANDEREN Geraets faelschen — dieselbe UUID im
+# Topic, dasselbe Konto, derselbe Schluessel. Das zu schliessen braeuchte ein
+# Konto je Geraet (Benutzername = device_UUID, dann `pattern write
+# punisher/devices/%u/#`). Bewusst nicht gemacht: sechs Konten, sechs
+# Passwoerter, und ein vertippter Benutzername sieht waehrend der Ausstellung
+# aus wie ein defektes Geraet (Entscheidung Philine 2026-09-15).
+#
+# DAMIT SIE UEBERHAUPT ETWAS TRENNT
+#
+# Bis 2.1.0 sprachen Zentrale, Web, Anzeige UND alle Geraete mit demselben
+# Konto `punisher`. Ein Broker kann nicht trennen, was er nicht unterscheiden
+# kann. Es braucht die vier Konten unten; wie sie angelegt werden, steht in
+# tools/mqtt_accounts.sh und in Doc 40.
+#
+# EINSPIELEN
+#
+#   acl_file /etc/mosquitto/punisher.acl     (siehe punisher.conf)
+#   systemctl reload mosquitto
+#
+# Mosquitto liest die Datei beim Start und bei SIGHUP. Ein Tippfehler in einem
+# Topic ist KEIN Fehler beim Laden — die Zeile trifft dann einfach nie zu, und
+# der Zugriff faellt still weg. Deshalb prueft centest/t_acl.sh diese Datei
+# gegen einen echten Broker und nicht durch Nachlesen.
+
+
+# --------------------------------------------------------------------------
+# Anonym: nichts.
+#
+# Diese Zeile ist die Grundlage aller anderen. Ohne sie und ohne
+# `allow_anonymous false` in der Broker-Einstellung steht der ganze Baum offen,
+# und alles Weitere hier ist Zierde.
+# --------------------------------------------------------------------------
+topic deny $SYS/#
+
+
+# --------------------------------------------------------------------------
+# Die Zentrale — die einzige Stelle, die alles darf.
+#
+# Sie IST die Autoritaet der Anlage: sie schreibt Befehle, sie fuehrt die
+# Teilnehmerkanaele, sie stellt die Uhr der Geraete. Ihr hier einzeln
+# aufzuzaehlen, was sie darf, waere eine zweite Liste neben punmqtt.py, die
+# beim naechsten neuen Topic auseinanderlaeuft — und der Ausfall waere still.
+# --------------------------------------------------------------------------
+user punisher-central
+topic readwrite punisher/#
+
+
+# --------------------------------------------------------------------------
+# Das Webinterface — darf steuern, aber nichts behaupten.
+#
+# Es schreibt auf dem Steuerpfad (das ist sein Zweck) und schickt die
+# Eingriffe der Aufsicht direkt an ein Geraet. Es schreibt NICHT auf
+# punisher/devices/+/{hello,state,event,log,available}: was ein Geraet ueber
+# sich sagt, sagt das Geraet. Und es schreibt NICHT auf punisher/slaves/#:
+# auf einem Teilnehmerkanal sendet nur die Zentrale (Doc 03).
+# --------------------------------------------------------------------------
+user punisher-web
+topic write punisher/central/request
+topic write punisher/central/reload
+topic write punisher/central/last_unknown_rfid
+topic write punisher/devices/+/cmd
+topic write punisher/devices/+/emergency
+topic write punisher/emergency
+topic read punisher/devices/+/hello
+topic read punisher/devices/+/state
+topic read punisher/devices/+/available
+topic read punisher/devices/+/event
+topic read punisher/devices/+/log
+topic read punisher/devices/+/response
+topic read punisher/central/heartbeat
+topic read punisher/central/event
+topic read punisher/central/last_unknown_rfid
+topic read punisher/central/session
+topic read punisher/central/leaderboard
+
+
+# --------------------------------------------------------------------------
+# Die HDMI-Anzeige — liest, schreibt nie.
+#
+# Sie zeigt an, sie greift nicht ein. Ein Konto ohne jedes Schreibrecht ist
+# hier keine Vorsicht, sondern eine Aussage: was auf dem Schirm steht, kann
+# nichts ausloesen.
+# --------------------------------------------------------------------------
+user punisher-display
+topic read punisher/central/session
+topic read punisher/central/event
+topic read punisher/central/heartbeat
+topic read punisher/central/leaderboard
+topic read punisher/devices/+/state
+topic read punisher/devices/+/event
+topic read punisher/devices/+/emergency
+topic read punisher/emergency
+
+
+# --------------------------------------------------------------------------
+# Die Geraete — duerfen ueber sich berichten und zuhoeren. Mehr nicht.
+#
+# HIER LIEGT DER GESCHLOSSENE ANGRIFFSPFAD: kein `topic write` auf
+# punisher/central/# und keines auf punisher/slaves/#. Ein Geraet, dessen
+# Firmware jemand ausgetauscht hat, kann mit gueltigem Projektschluessel
+# weiterhin alles Moegliche RECHNEN — an den Broker kommt es damit nicht mehr
+# vorbei.
+#
+# Der Nothalt ist die eine Ausnahme nach oben: ein Geraet darf ihn ausloesen.
+# Abschalten ist die harmlose Richtung; ein Nothalt, der an einer Berechtigung
+# scheitert, waere die gefaehrliche. Dieselbe Begruendung, aus der er auch
+# nicht signiert wird (punsign.py).
+# --------------------------------------------------------------------------
+user punisher-device
+topic write punisher/devices/+/available
+topic write punisher/devices/+/hello
+topic write punisher/devices/+/response
+topic write punisher/devices/+/state
+topic write punisher/devices/+/event
+topic write punisher/devices/+/log
+topic write punisher/devices/+/live
+topic write punisher/emergency
+topic read punisher/devices/+/cmd
+topic read punisher/devices/+/settings
+topic read punisher/devices/+/emergency
+topic read punisher/central/heartbeat
+topic read punisher/slaves/+/punish
+topic read punisher/slaves/+/reward
+topic read punisher/slaves/+/live
+topic read punisher/emergency

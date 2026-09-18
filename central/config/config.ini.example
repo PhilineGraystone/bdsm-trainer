@@ -1,0 +1,103 @@
+[database]
+hostname = localhost
+username = punisher
+password = CHANGEME-DB
+database = punisher
+; Datenbank beim Start der Zentrale automatisch auf den Stand des Codes bringen (sql/):
+; auto_migrate = 1            0 = nur pruefen und warnen, von Hand: python3 libs/dbmigrate.py
+; backup_before_migrate = 1   mysqldump nach logs/ vor dem Einspielen
+; require_backup = 0          1 = ohne gelungene Sicherung nicht migrieren
+
+[safety]
+; Sicherheitsgrenzen des Bestrafungskanals (Doc 14 3a) - bewusst NICHT im Web aenderbar
+; Mindestpause zwischen zwei Kanal-Bestrafungen je Teilnehmer (Verstoesse darin werden eingereiht)
+channel_gap_s = 3
+; Hoechstzahl Kanal-Bestrafungen je Teilnehmer und Tag (zaehlt aus dem Audit-Log)
+channel_day_max = 60
+; Tagesmodell (Doc 14 12): der Teilnehmer meldet sich einmal am Tag an, die Zentrale fuehrt
+; ihn durch den Tag. Diese Grenzen stehen ueber jeder Regel und jeder Bestrafung - eine Regel
+; darf die Tagesdauer aendern, aber niemals ueber day_minutes_max hinaus.
+; Vorgabe-Tagesdauer je Teilnehmer, wenn nichts eingestellt ist (Minuten)
+day_minutes_default = 360
+; Hoechste Tagesdauer, die eingestellt oder von einer Regel erreicht werden kann (Minuten)
+day_minutes_max = 480
+; Nach so vielen Minuten Training kommt zwingend eine Pause (Minuten)
+train_block_max_min = 45
+; Mindestlaenge dieser Pflichtpause (Minuten)
+break_min_min = 10
+
+[mqtt]
+hostname = localhost
+; Port und TLS (2.3, Doc 53). VORGABE DIESES STANDES: Klartext auf 1883 — damit
+; laeuft die Anlage ohne einen einzigen Handgriff, und wer sie nachbaut, muss
+; kein Zertifikat verstehen (Entscheidung Philine 2026-09-16).
+;
+; Drei Zustaende, und jeder steht beim Start im Protokoll:
+;   nichts gesetzt      1883, Klartext
+;   tls = 1             8883, verschluesselt, Zertifikat NICHT geprueft
+;   dazu tls_ca = ...   8883, verschluesselt, geprueft gegen GENAU dieses
+;                       Zertifikat (ein Pin, keine Kette — die Anlage hat
+;                       bewusst keine eigene CA)
+;
+; Ohne `port` waehlt die Zentrale selbst: 8883 wenn tls, sonst 1883. Das ist
+; kein Komfort — eine Anlage, die tls einschaltet und den Port vergisst, redet
+; sonst TLS gegen den Klartext-Listener und bekommt einen Handshake-Fehler,
+; der alles nennt ausser der Ursache.
+;
+; Zertifikat erzeugen: sudo bash tools/mqtt_tls.sh <brokername>
+;port = 8883
+;tls = 1
+;tls_ca = /etc/mosquitto/certs/punisher.crt
+; Konto der ZENTRALE. Seit 2.1.1 hat jeder Prozess ein eigenes, damit die
+; Zugriffsliste des Brokers (config/mosquitto/punisher.acl) ueberhaupt etwas
+; trennen kann: ein Broker unterscheidet nicht, was unter demselben Benutzer
+; spricht. Anlegen mit tools/mqtt_accounts.sh (Doc 40).
+username = punisher-central
+password = CHANGEME-MQTT
+; Projektschluessel fuer die Signatur (HMAC-SHA256). MUSS auf der Zentrale UND
+; in der creds.h jedes Geraets derselbe sein. Ohne ihn wird weder signiert noch
+; geprueft, und ein Geraet ab 2.0 weist die Befehle der Zentrale ab.
+; Erzeugen z. B. mit: python3 -c "import secrets;print(secrets.token_hex(32))"
+project_key = CHANGEME-PROJECT-KEY
+
+; Eigene Brokerkonten fuer Webinterface und Anzeige (2.1.1). FEHLEN diese
+; Abschnitte, nimmt der jeweilige Prozess das Konto aus [mqtt] — er laeuft
+; dann, aber die Zugriffsliste hat fuer ihn keine Wirkung, und das Protokoll
+; sagt es beim Start. hostname und project_key kommen immer aus [mqtt].
+[mqtt_web]
+username = punisher-web
+password = CHANGEME-MQTT-WEB
+
+[mqtt_display]
+username = punisher-display
+password = CHANGEME-MQTT-DISPLAY
+
+;[health]
+; Schwellen fuer Rot/Gruen je Geraet (Doc 42). Rot ist eine Liste von Bedingungen,
+; kein Prozentwert. Ohne diesen Abschnitt gelten die Vorgaben aus libs/devicehealth.py.
+;rssi_min_dbm = -80
+;heap_min_bytes = 40000
+;restart_recent_s = 600
+
+[web]
+; Passwort der Aufsicht fuer das Webinterface (Pflicht - ohne startet es nicht)
+password = CHANGEME-WEB
+; optional: fester Sitzungsschluessel (sonst bei jedem Start neu -> alle abgemeldet)
+; secret = 64 zufaellige Hex-Zeichen, z. B. aus: python3 -c "import secrets;print(secrets.token_hex(32))"
+port = 8080
+; bind = 0.0.0.0
+; Salz fuer die Pseudonyme im Export (Doc 14); fest setzen, damit Pseudonyme stabil bleiben
+; export_salt = CHANGEME-SALT
+
+[display]
+; HDMI-Anzeige (punisher-display.py), 7" 1024x600
+width = 1024
+height = 600
+fullscreen = 1
+; kmsdrm = direkt auf HDMI ohne Desktop (Pi OS Lite). DISPLAY aus einer SSH-Sitzung
+; (MobaXterm) wird dabei ignoriert. Mit Desktop: x11, wayland oder auto.
+driver = kmsdrm
+fps = 25
+lang = de
+title = PUNISHER
+subtitle = Devious City

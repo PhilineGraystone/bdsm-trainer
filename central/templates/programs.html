@@ -1,0 +1,13 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Programme{% endblock %}
+{% block content %}
+<h1>{{ _('Programme') }} <a class="btn right" href="{{ url_for('program_edit') }}">{{ _('+ Neu') }}</a></h1>
+<div class="panel"><table><thead><tr><th>{{ _('Programm') }}</th><th>{{ _('Beschreibung') }}</th><th>{{ _('Schritte') }}</th><th>{{ _('Sklaven') }}</th><th>{{ _('aktiv bei') }}</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr>
+  <td><a href="{{ url_for('program_detail', pid=r.pro_id) }}"><b>{{ r.pro_name }}</b></a>{% if r.pro_id in invalid %} <span class="pill off" title="{{ invalid[r.pro_id]|join(' · ') }}">{{ _('ungültig') }}</span>{% endif %}</td>
+  <td class="small">{{ r.pro_functions }}</td><td>{{ r.n_steps }}</td><td>{{ r.n_slaves }}</td><td>{{ r.n_active }}</td>
+  <td class="actions"><a class="btn sm" href="{{ url_for('program_detail', pid=r.pro_id) }}">{{ _('Schritte') }}</a> <a class="btn sm" href="{{ url_for('program_edit', pid=r.pro_id) }}">{{ _('Bearbeiten') }}</a></td>
+</tr>{% else %}<tr><td colspan="6" class="muted">{{ _('Noch keine Programme.') }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="small muted">{{ _('„ungültig“ = ein Schritt passt nicht zur Aktions-Registry; die Zentrale startet solche Programme nicht (Meldung am LCD).') }}</p>
+{% endblock %}

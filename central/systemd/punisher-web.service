@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later
+[Unit]
+Description=Punisher Webinterface (Aufsicht)
+After=network-online.target mariadb.service mosquitto.service
+PartOf=punisher.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=punisher
+WorkingDirectory=/opt/punisher
+ExecStart=/usr/bin/python3 /opt/punisher/punisher-web.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=punisher.target

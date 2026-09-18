@@ -1,0 +1,13 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Sklaven bearbeiten{% endblock %}
+{% block content %}
+<h1>{{ 'Sklaven bearbeiten' if row else 'Neuer Sklave' }}</h1>
+<div class="panel" style="max-width:640px"><form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}">
+  <label>{{ _('Name') }}</label><input name="slave_name" value="{{ row.slave_name if row else '' }}" required maxlength="255" autofocus>
+  <label>{{ _('RFID (Inhalt Block 8, wie im Log „Slave not found - RFID …“)') }}</label>
+  <input name="slave_rfid" class="mono" value="{{ row.slave_rfid if row else (last_rfid.rfid if last_rfid else '') }}" required maxlength="255">
+  {% if last_rfid and not row %}<div class="small muted">{{ _('Vorbelegt mit dem zuletzt unbekannten Tag') }} ({{ last_rfid.ts_ms|ts }}). {{ _('Tag einfach an der Zentrale auflegen, dann hier neu laden.') }}</div>{% endif %}
+  <p style="margin-top:16px"><button class="primary">{{ _('Speichern') }}</button> <a class="btn" href="{{ url_for('slave_detail', sid=row.slave_id) if row else url_for('slaves') }}">{{ _('Abbrechen') }}</a></p>
+</form></div>
+{% if row %}<div class="panel" style="max-width:640px"><form method="post" action="{{ url_for('slave_delete', sid=row.slave_id) }}" onsubmit="return confirm('Sklaven samt Zuordnungen löschen?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="danger">{{ _('Sklaven löschen') }}</button> <span class="small muted">{{ _('entfernt auch Programm- und Gerätezuordnungen; das Protokoll bleibt.') }}</span></form></div>{% endif %}
+{% endblock %}

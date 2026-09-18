@@ -1,0 +1,58 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Serien{% endblock %}
+{% block content %}
+<h1>{{ _('Serien') }} <span class="muted small">{{ _('Zähler mit Zähl- und Reset-Bedingung') }}</span></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Eine Serie zählt etwas in Folge — Tage ohne Verstoß, bestandene Durchgänge, volle Wochenpläne — und beginnt bei null, wenn die Reset-Bedingung eintritt. Erreicht sie einen Meilenstein, feuert im Regelwerk der Anlass „Serie: Meilenstein erreicht“; reißt sie, feuert „Serie gebrochen“. Was daraus folgt, steht dort — hier steht nur, was gezählt wird.') }}
+  <b>{{ _('Der Verlust wird angezeigt') }}</b>: {{ _('„Serie gebrochen: 6 Tage“ steht einen Tag lang auf dem Bildschirm und auf der Teilnehmerseite.') }}</p>
+</div>
+
+<div class="panel">
+<table><thead><tr><th>{{ _('Name') }}</th><th>{{ _('Art') }}</th><th>{{ _('Aufgabe') }}</th><th>{{ _('Meilensteine') }}</th><th>{{ _('läuft bei') }}</th><th>{{ _('Rekord') }}</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr {{ 'style=opacity:.45' if not r.st_enabled }}>
+  <td><b>{{ r.st_name }}</b><br><span class="small muted mono">{{ r.st_key }}</span></td>
+  <td class="small">{{ r.kind_name }}</td>
+  <td class="small">{{ r.action_name or _('alle') }}</td>
+  <td class="mono small">{{ r.st_milestones or '–' }}</td>
+  <td class="small">{{ r.running }} {{ _('Teilnehmerinnen') }}</td>
+  <td class="mono">{{ r.best or 0 }}</td>
+  <td class="actions"><form class="inline" method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="st_id" value="{{ r.st_id }}">
+    <button name="op" value="toggle" class="sm">{{ 'aus' if r.st_enabled else 'an' }}</button>
+    <button name="op" value="reset" class="sm" onclick="return confirm('{{ _('Alle Zähler dieser Serie auf null?') }}')">{{ _('Zähler 0') }}</button>
+    <button name="op" value="delete" class="sm danger" onclick="return confirm('{{ _('Serie löschen? Die Zähler gehen mit.') }}')">✕</button></form></td>
+</tr>{% else %}<tr><td colspan="7" class="muted">{{ _('Keine Serien — dann wird nichts in Folge gezählt.') }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+
+<div class="grid">
+<div class="panel"><h2 style="margin-top:0">{{ _('Serie anlegen') }}</h2>
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+    <label>{{ _('Schlüssel') }}</label><input name="key" maxlength="32" pattern="[a-z0-9_\-]+" required placeholder="{{ _('z. B. clean') }}">
+    <p class="small muted" style="margin:4px 0 0">{{ _('Kurz, ohne Leerzeichen — so heißt sie in Regeln (Bedingung „Serie: …“) und im Protokoll. Derselbe Schlüssel überschreibt.') }}</p>
+    <label>{{ _('Name') }}</label><input name="name" maxlength="80" required placeholder="{{ _('Tage ohne Verstoß') }}">
+    <label>{{ _('Art') }}</label>
+    <select name="kind" id="st_kind">{% for k, v in KINDS.items() %}<option value="{{ k }}" data-help="{{ v[1] }}" data-run="{{ 1 if k in RUN_KINDS else 0 }}">{{ v[0] }}</option>{% endfor %}</select>
+    <p class="small muted" style="margin:4px 0 0" id="st_help"></p>
+    <div id="st_action_row" style="display:none"><label>{{ _('Nur diese Aufgabe') }}</label>
+      <select name="action"><option value="">{{ _('alle Aufgaben') }}</option>{% for a in TRAINABLE %}<option value="{{ a.code }}">{{ a.name }}</option>{% endfor %}</select></div>
+    <label>{{ _('Meilensteine') }}</label><input name="milestones" maxlength="64" placeholder="3,7,14">
+    <p class="small muted" style="margin:4px 0 0">{{ _('Bei jedem dieser Werte feuert „Serie: Meilenstein erreicht“ einmal. Leer: die Serie zählt und bricht, aber nichts feiert sie.') }}</p>
+    <p style="margin-top:14px"><button class="primary">{{ _('Speichern') }}</button></p>
+  </form>
+</div>
+<div class="panel"><h2 style="margin-top:0">{{ _('Die Arten') }}</h2>
+  <table><tbody>
+  {% for k, v in KINDS.items() %}<tr><td><b>{{ v[0] }}</b><br><span class="small muted mono">{{ k }}</span></td><td class="small">{{ v[1] }}</td></tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted">{{ _('Pausierte Tage zählen nicht und brechen nicht. Eine Kette „zweimal gescheitert → Eskalation“ ist eine Serie „Durchgänge gescheitert“ mit Meilenstein 2 und eine Regel auf „Serie: Meilenstein erreicht“ mit Bedingung „Serie: …“.') }}</p>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+  var k = document.getElementById('st_kind'), h = document.getElementById('st_help'), ar = document.getElementById('st_action_row');
+  function upd(){ var o = k.options[k.selectedIndex]; h.textContent = o.dataset.help || ''; ar.style.display = o.dataset.run === '1' ? '' : 'none'; }
+  k.addEventListener('change', upd); upd();
+})();
+</script>{% endblock %}

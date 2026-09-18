@@ -1,0 +1,32 @@
+# Punisher — Partitionstabelle ESP32-S3 mit 16 MB Flash (CoyoteBridge)
+#
+# Arduino-ESP32 flasht fest: bootloader @0x0 (S3, nicht 0x1000 wie beim klassischen
+# ESP32), partitions @0x8000, boot_app0 (otadata) @0xe000, app @0x10000.
+#
+# Zwei OTA-Slots zu je 6 MB: die PunisherDevice-Basis mit WiFi/MQTT/OTA/WebServer/
+# JSON plus NimBLE liegt deutlich ueber 1 MB, die 1,25-MB-Slots des Standardschemas
+# waeren zu knapp. SPIFFS als Reserve, Coredump fuer Absturzanalyse.
+#
+# Arduino IDE : Datei im Sketch-Ordner; Werkzeuge:
+#                 Board          = ESP32S3 Dev Module
+#                 Flash Size     = 16MB (128Mb)
+#                 Partition Sch. = Custom
+#                 USB CDC On Boot= Enabled
+#                 PSRAM          = NUR was das Modul wirklich hat. Im Zweifel
+#                                  "Disabled" — die Bruecke braucht kein PSRAM
+#                                  (gut 10 kB Wellenformspeicher). Eine falsche
+#                                  Einstellung haengt den Start, BEVOR die
+#                                  Anwendung ueberhaupt laeuft.
+#                 Flash Mode     = QIO bei Quad-Flash; Module mit OPI-Flash
+#                                  (…N16R8V) brauchen OPI.
+#               Beim Layoutwechsel einmalig "Erase All Flash Before Sketch
+#               Upload: Enabled", sonst steht altes NVS/otadata im Weg.
+# PlatformIO  : board_build.partitions = partitions.csv
+#
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+app0,       app,  ota_0,    0x10000,  0x600000,
+app1,       app,  ota_1,    0x610000, 0x600000,
+spiffs,     data, spiffs,   0xC10000, 0x3E0000,
+coredump,   data, coredump, 0xFF0000, 0x10000,

@@ -1,0 +1,96 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Tagesplan{% endblock %}
+{% block content %}
+<h1>{{ _('Tagespläne') }} <span class="muted small">{{ _('Struktur eines Trainingstages') }}</span>
+  <a class="btn right" href="{{ url_for('lb.dayplans_view') }}#neu">{{ _('+ Neu') }}</a></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Ein Sklave meldet sich') }} <b>{{ _('einmal am Tag') }}</b> {{ _('an; danach führt die Zentrale ihn durch den Tag. Hier steht nur die') }} <b>{{ _('Struktur') }}</b> {{ _('— was in den Trainingsblöcken passiert, nimmt die Zentrale aus dem Wochenplan. Ein Block der Art') }} <b>{{ _('Wochenplan') }}</b> {{ _('oder') }} <b>{{ _('freies Training') }}</b> {{ _('ist ein') }}
+  <b>{{ _('Zeitbudget') }}</b>{{ _(': solange es reicht, kommt die nächste Aufgabe im selben Block. Die Vorlage wird wiederholt, bis die Tagesdauer des Sklaven abgelaufen ist. Über allem stehen die harten Grenzen aus') }}
+  <span class="mono">config.ini [safety]</span>: {{ _('Tagesdauer höchstens') }} {{ limits.day_minutes_max }} {{ _('min, nach') }}
+  {{ limits.train_block_max_min }} {{ _('min Training zwingend') }} {{ limits.break_min_min }} {{ _('min Pause — keine Regel und keine Bestrafung hebt sie an.') }}</p>
+</div>
+
+{% for p in plans %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ p.dp_name }}
+    {% if p.dp_default %}<span class="pill on">{{ _('Vorgabe für alle ohne eigene Zuordnung') }}</span>{% endif %}
+    <span class="muted small">· {{ p.total_min }} {{ _('min je Durchlauf') }} · {{ p.n_slaves }} {{ _('Sklaven') }}</span>
+    <a class="btn sm right" href="{{ url_for('lb.dayplan_actions', pid=p.dp_id) }}">{{ _('Aufgaben') }}{% if p.n_blocked %}
+      <span class="pill act">{{ p.n_blocked }} {{ _('gesperrt') }}</span>{% endif %}</a></h2>
+  {% if p.dp_note %}<p class="small muted" style="margin-top:-4px">{{ p.dp_note }}</p>{% endif %}
+  <table><thead><tr><th>#</th><th>{{ _('Art') }}</th><th>{{ _('Dauer') }}</th><th>{{ _('Inhalt') }}</th><th></th></tr></thead><tbody>
+  {% for b in p.blocks %}<tr>
+    <td class="stepnum">{{ loop.index }}</td>
+    <td><b>{{ KINDS[b.db_kind][0] }}</b><br><span class="small muted">{{ KINDS[b.db_kind][1] }}</span></td>
+    <td>{{ b.db_minutes }} {{ _('min') }}</td>
+    <td class="small">{% if b.db_kind == 'pause' %}„{{ b.db_text or _('Pause.') }}“
+      {% elif b.db_kind == 'program' %}{{ b.program_name or _('– Programm gelöscht –') }}
+      {% elif b.db_kind == 'plan' and b.db_action %}{{ _('nur') }} {{ b.db_action|action_name }}
+      {% elif b.db_kind == 'plan' %}<span class="muted">{{ _('nächste offene Aufgabe') }}</span>
+      {% elif b.db_kind == 'mystery' %}<span class="mono">?</span> {{ _('Pool') }}:
+        {% if b.db_text %}{{ b.db_text }}{% else %}<span class="pill off">{{ _('leer — zieht nichts') }}</span>{% endif %}
+        <a class="btn sm" href="{{ url_for('lb.dayblock_pool', pid=p.dp_id, bid=b.db_id) }}">{{ _('wählen') }}</a>
+      {% else %}<span class="muted">{{ _('Zentrale wählt') }}</span>{% endif %}</td>
+    <td class="actions">
+      <form class="inline" method="post" action="{{ url_for('lb.dayplan_block', pid=p.dp_id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="db_id" value="{{ b.db_id }}">
+        <button name="op" value="up" class="sm" {{ 'disabled' if loop.first }}>▲</button>
+        <button name="op" value="down" class="sm" {{ 'disabled' if loop.last }}>▼</button>
+        <button name="op" value="delete" class="sm danger">✕</button></form></td>
+  </tr>{% else %}<tr><td colspan="5" class="muted">{{ _('Noch keine Blöcke — unten einen hinzufügen.') }}</td></tr>{% endfor %}
+  </tbody></table>
+
+  <form method="post" action="{{ url_for('lb.dayplan_block', pid=p.dp_id) }}" class="row bform" style="align-items:flex-end;margin-top:10px">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+    <div style="flex:0 0 190px"><label>{{ _('Art') }}</label><select name="kind" class="bkind">
+      {% for k, v in KINDS.items() %}<option value="{{ k }}" data-help="{{ v[1] }}">{{ v[0] }}</option>{% endfor %}</select></div>
+    <div style="flex:0 0 100px"><label>{{ _('Dauer (min)') }}</label><input type="number" name="minutes" min="1" max="240" value="30"></div>
+    <div style="flex:1 1 220px" data-for="pause"><label>{{ _('Anweisung') }}</label><input name="text" maxlength="200" placeholder="{{ _('Du darfst jetzt etwas essen.') }}"></div>
+    <div style="flex:0 0 200px" data-for="program"><label>{{ _('Programm') }}</label><select name="program"><option value="">–</option>
+      {% for pr in programs %}<option value="{{ pr.pro_id }}">{{ pr.pro_name }}</option>{% endfor %}</select></div>
+    <div style="flex:0 0 200px" data-for="plan"><label>{{ _('Nur diese Aufgabe') }}</label><select name="action"><option value="">{{ _('nächste offene') }}</option>
+      {% for a in TRAINABLE %}<option value="{{ a.code }}">{{ a.name }}</option>{% endfor %}</select></div>
+    <div style="flex:1 1 320px" data-for="mystery"><label>{{ _('Pool (kann leer bleiben)') }}</label><input name="pool" maxlength="255" placeholder="{{ _('leer lassen und danach auswählen') }}" list="poolcodes">
+      <datalist id="poolcodes">{% for a in TRAINABLE %}<option value="{{ a.code }}">{{ a.name }}</option>{% endfor %}<option value="punish:1"><option value="punish:2"><option value="punish:3"><option value="reward:1"><option value="reward:2"><option value="reward:3"></datalist></div>
+    <div style="flex:0 0 auto"><button class="primary">{{ _('Block hinzufügen') }}</button></div>
+    <div style="flex:1 1 100%"><p class="small muted bhelp" style="margin:2px 0 0"></p>
+      <p class="small muted" data-for="mystery" style="margin:2px 0 0">{{ _('Der Pool ist die Sicherheitsgrenze: gezogen wird nur, was drinsteht UND was für sie ohnehin erlaubt ist — Decke, Auflagen, Budgets und die Aufgabensperren des Plans gelten unverändert. Im Prüfprotokoll steht vorher, was gezogen wurde. Das Feld kann leer bleiben: danach wird der Pool auf einer eigenen Seite angekreuzt statt getippt.') }}</p></div>
+  </form>
+
+  <form method="post" action="{{ url_for('lb.dayplan_edit', pid=p.dp_id) }}" class="row" style="align-items:flex-end;margin-top:8px">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div><label>{{ _('Name') }}</label><input name="name" value="{{ p.dp_name }}" maxlength="120"></div>
+    <div style="flex:2 1 300px"><label>{{ _('Notiz') }}</label><input name="note" value="{{ p.dp_note or '' }}" maxlength="255"></div>
+    <div style="flex:0 0 auto"><label>&nbsp;</label><label style="display:inline"><input type="checkbox" name="default" value="1" {{ 'checked' if p.dp_default }}> {{ _('Vorgabe') }}</label></div>
+    <div style="flex:0 0 auto"><button name="op" value="save">{{ _('Speichern') }}</button></div>
+    <div style="flex:0 0 auto"><button name="op" value="copy" title="{{ _('Legt eine Kopie an — mit Blöcken und Aufgabenentscheidungen, aber nie als Vorgabe.') }}">{{ _('duplizieren') }}</button></div>
+    <div style="flex:0 0 auto"><button name="op" value="delete" class="danger" onclick="return confirm('Tagesplan löschen? Sklaven fallen auf die Vorgabe zurück.')">{{ _('Löschen') }}</button></div>
+  </form>
+</div>
+{% else %}
+<div class="panel"><p class="muted">{{ _('Noch kein Tagesplan angelegt.') }}</p></div>
+{% endfor %}
+
+<div class="panel" id="neu"><h2 style="margin-top:0">{{ _('Neuer Tagesplan') }}</h2>
+  <form method="post" action="{{ url_for('lb.dayplans_view') }}" class="row" style="align-items:flex-end">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div><label>{{ _('Name') }}</label><input name="name" required maxlength="120" placeholder="{{ _('z. B. Museumstag') }}"></div>
+    <div style="flex:2 1 320px"><label>{{ _('Notiz') }}</label><input name="note" maxlength="255"></div>
+    <div style="flex:0 0 auto"><button class="primary">{{ _('Anlegen') }}</button></div>
+  </form>
+  <p class="small muted">{{ _('Ein neuer Plan startet ohne Blöcke; ohne Blöcke füllt die Zentrale den Tag mit freiem Training.') }}</p>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+// Show only the fields that belong to the chosen block kind — otherwise the
+// supervisor has to guess which input currently counts.
+document.querySelectorAll('form.bform').forEach(function (f) {
+  var sel = f.querySelector('.bkind'), help = f.querySelector('.bhelp');
+  function upd() {
+    var k = sel.value;
+    f.querySelectorAll('[data-for]').forEach(function (d) { d.hidden = d.dataset.for !== k; });
+    help.textContent = sel.options[sel.selectedIndex].dataset.help || '';
+  }
+  sel.addEventListener('change', upd); upd();
+});
+</script>{% endblock %}

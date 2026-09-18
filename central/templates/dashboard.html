@@ -1,0 +1,10 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Live{% endblock %}
+{% block content %}
+<h1>{{ _('Live-Status') }}</h1>
+<div id="status">{% include '_status.html' %}</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){var busy=false;setInterval(function(){if(busy||document.activeElement&&document.activeElement.tagName==='INPUT')return;busy=true;
+fetch("{{ url_for('fragment_status') }}",{credentials:'same-origin'}).then(function(r){return r.ok?r.text():null}).then(function(t){if(t)document.getElementById('status').innerHTML=t;}).catch(function(){}).finally(function(){busy=false;});},3000);})();
+</script>{% endblock %}

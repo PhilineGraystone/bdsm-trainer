@@ -1,0 +1,10 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Export{% endblock %}
+{% block content %}
+<h1>{{ _('Export für das Inhaltsteam') }}</h1>
+<div class="panel" style="max-width:760px">
+  <p>{{ _('Pseudonymisierter Export aller Durchgänge ({n}), Wochenbewertungen, Wochenpläne, Ränge, Stufen und Abzeichen als CSV (Trennzeichen', n=n) }} <span class="mono">;</span>{{ _(') in einer ZIP-Datei. Sklaven erscheinen als stabile Pseudonyme (T + 8 Hex-Zeichen aus einem Salz in der config.ini) — keine Namen, keine RFID, keine Fotos. Damit lassen sich Verhalten, Noten, Bestrafungen und Rangverläufe auswerten, ohne Personen zu erkennen.') }}</p>
+  <p><a class="btn primary" href="{{ url_for('lb.export_download') }}">{{ _('ZIP herunterladen') }}</a></p>
+  <p class="small muted">{{ _('Löschen eines Sklaven (Sklaven → Bearbeiten → Löschen) entfernt Logbuch, Pläne, Rang, Abzeichen, Kalibrierung und Foto mit (ON DELETE CASCADE). Ein bereits erzeugter Export bleibt davon unberührt. Salz:') }} <span class="mono">[web] export_salt</span> {{ _('in der config.ini (sonst das Web-Secret; ohne festes Secret wechseln die Pseudonyme bei jedem Neustart des Webinterface).') }}</p>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later
+[Unit]
+Description=Punisher Anlage (Zentrale, Webinterface, HDMI-Anzeige)
+Requires=punisher.service
+Wants=punisher-web.service punisher-display.service
+After=punisher.service
+
+[Install]
+WantedBy=multi-user.target

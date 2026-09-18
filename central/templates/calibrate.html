@@ -1,0 +1,93 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Kalibrierung {{ row.slave_name }}{% endblock %}
+{% block content %}
+<h1>{{ _('Kalibrierung') }}: {{ row.slave_name }} <span class="muted" style="font-size:14px">· {{ dev.dev_address or dev.dev_name[:8] }} <span class="mono">{{ dev.dev_name }}</span></span> <a class="btn sm" href="{{ url_for('slave_detail', sid=row.slave_id) }}">{{ _('Zurück') }}</a></h1>
+
+{% if not online or not online.online %}<div class="flash error">{{ _('Das Halsband ist offline — Kalibrieren geht nur mit eingeschaltetem, verbundenem Gerät.') }}</div>{% endif %}
+
+<div class="grid">
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Ablauf') }}</h2>
+  <p class="small">{{ _('Der Sklave trägt das Halsband so, wie er es später trägt. Zwei Haltungen werden je {n} Sekunden gemessen; dabei ruhig halten (das Halsband piept, wenn die Messung fertig ist). Aus beiden Haltungen entscheidet das Halsband im Pet-Modus, welcher es gerade näher ist — ein fester Winkel ist dann nicht mehr nötig. Die Werte gelten für', n=seconds) }} <b>{{ _('diesen Sklaven mit diesem Halsband') }}</b> {{ _('und werden der Zentrale mit dem PET-Schritt mitgegeben.') }}</p>
+  <div class="row" style="margin-top:12px">
+    <div><button class="primary" style="width:100%" onclick="capture('pet')" {{ 'disabled' if not online or not online.online }}>{{ _('1 · Auf allen vieren messen') }}</button>
+      <div class="small muted" style="margin-top:4px">{{ _('Sklave geht auf alle viere, Kopf in der normalen Haltung.') }}</div></div>
+    <div><button class="primary" style="width:100%" onclick="capture('stand')" {{ 'disabled' if not online or not online.online }}>{{ _('2 · Stehend messen') }}</button>
+      <div class="small muted" style="margin-top:4px">{{ _('Sklave steht aufrecht, Blick geradeaus.') }}</div></div>
+  </div>
+  <div id="capmsg" class="small" style="margin-top:10px;min-height:20px"></div>
+
+  <h2>{{ _('Gespeichert') }}</h2>
+  <table><thead><tr><th>{{ _('Haltung') }}</th><th>{{ _('Vektor (g)') }}</th><th>{{ _('ruhig') }}</th><th>{{ _('gemessen') }}</th><th></th></tr></thead><tbody>
+  {% for pose, label in [('pet','auf allen vieren'), ('stand','stehend')] %}<tr>
+    <td>{{ label }}</td>
+    {% if pose in cal %}<td class="mono">{{ '%.3f'|format(cal[pose].sc_x) }} / {{ '%.3f'|format(cal[pose].sc_y) }} / {{ '%.3f'|format(cal[pose].sc_z) }}</td><td>{{ 'ja' if cal[pose].sc_still else 'nein' }}</td><td class="small">{{ cal[pose].sc_ts|ts }}</td>
+      <td><form method="post" class="inline" action="{{ url_for('calibrate_action', sid=row.slave_id, device=dev.dev_name, action='delete_' ~ pose) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm danger">✕</button></form></td>
+    {% else %}<td colspan="4" class="muted">{{ _('noch nicht gemessen') }}</td>{% endif %}
+  </tr>{% endfor %}
+  </tbody></table>
+  <p class="small" id="sepline">{% if sep is not none %}{{ _('Abstand der Haltungen') }}: <b>{{ sep }}°</b> — {% if sep >= 40 %}<span style="color:var(--ok)">{{ _('gut trennbar') }}</span>{% elif sep >= 20 %}<span style="color:var(--warn)">{{ _('knapp, besser neu messen') }}</span>{% else %}<span style="color:var(--err)">{{ _('zu nah beieinander — das Halsband lehnt diese Kalibrierung ab') }}</span>{% endif %}{% else %}<span class="muted">{{ _('Beide Haltungen messen, dann erscheint hier die Qualität.') }}</span>{% endif %}</p>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Live <button class="sm" onclick="startStream()" {{ 'disabled' if not online or not online.online }}>{{ _('Live-Werte für 90 s') }}</button></h2>
+  <div class="kv" style="margin-top:8px">
+    <div>{{ _('Schwerkraft x / y / z') }}</div><div class="mono" id="acc">–</div>
+    <div>{{ _('Drehrate') }}</div><div id="gyro">–</div>
+    <div>{{ _('Bewegung') }}</div><div id="moving">–</div>
+    <div>{{ _('Winkel zu „auf allen vieren“') }}</div><div id="apet">–</div>
+    <div>{{ _('Winkel zu „stehend“') }}</div><div id="astand">–</div>
+    <div>{{ _('Erkannt als') }}</div><div id="cls" style="font-weight:700">–</div>
+    <div>{{ _('Signal') }}</div><div id="rssi">–</div>
+    <div>{{ _('Alter der Werte') }}</div><div id="age" class="muted">–</div>
+  </div>
+  <div style="margin-top:14px;height:18px;background:var(--line);border-radius:9px;position:relative" title="{{ _('Position zwischen den Haltungen') }}">
+    <div id="bar" style="position:absolute;top:0;bottom:0;width:6px;background:var(--acc);border-radius:3px;left:50%"></div>
+    <span class="small muted" style="position:absolute;left:6px;top:20px">{{ _('auf allen vieren') }}</span><span class="small muted" style="position:absolute;right:6px;top:20px">{{ _('stehend') }}</span>
+  </div>
+  <p class="small muted" style="margin-top:34px">{{ _('„Erkannt als“ rechnet mit den gespeicherten Haltungen genauso wie das Halsband (ohne Hysterese). Sklaven aufstehen und hinknien lassen — wechselt die Anzeige zuverlässig, passt die Kalibrierung.') }}</p>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+var api = "{{ url_for('api_imu', sid=row.slave_id, device=dev.dev_name) }}";
+var csrf = "{{ csrf }}";
+function post(action, body){ var fd = new FormData(); fd.append('_csrf', csrf); for (var k in (body||{})) fd.append(k, body[k]);
+  return fetch("{{ url_for('calibrate_action', sid=row.slave_id, device=dev.dev_name, action='X') }}".replace('X', action), {method:'POST', body:fd, credentials:'same-origin'}); }
+var streaming = false;
+function startStream(){ post('stream').then(function(){ streaming = true; setTimeout(function(){ streaming=false; }, 90000); }); }
+var waiting = null;
+function capture(pose){ document.getElementById('capmsg').textContent = 'Messung läuft ({{ seconds }} s) — ruhig halten …'; waiting = pose;
+  post('capture_'+pose, {seconds: {{ seconds }}}).then(function(){ if(!streaming) startStream(); }); }
+function upd(){ fetch(api, {credentials:'same-origin'}).then(function(r){ return r.json(); }).then(function(j){
+  var imu = j.imu; var el = function(id){ return document.getElementById(id); };
+  if (imu) {
+    el('acc').textContent = imu.ax.toFixed(3)+' / '+imu.ay.toFixed(3)+' / '+imu.az.toFixed(3);
+    el('gyro').textContent = imu.gyro + ' °/s'; el('moving').textContent = imu.moving ? 'ja' : 'nein';
+    el('rssi').textContent = (imu.rssi||'–') + ' dBm'; el('age').textContent = j.age !== null ? ('vor '+j.age+' s' + (j.age > 3 ? ' — Live-Werte starten' : '')) : '–';
+    var ap = (j.angle_pet_db !== undefined) ? j.angle_pet_db : imu.angle_pet, as = (j.angle_stand_db !== undefined) ? j.angle_stand_db : imu.angle_stand;
+    el('apet').textContent = ap !== undefined && ap !== null ? ap + '°' : '–'; el('astand').textContent = as !== undefined && as !== null ? as + '°' : '–';
+    if (j.classified) { el('cls').textContent = j.classified === 'stand' ? 'STEHEND' : 'auf allen vieren'; el('cls').style.color = j.classified === 'stand' ? 'var(--err)' : 'var(--ok)'; }
+    if (ap != null && as != null && (ap+as) > 0) el('bar').style.left = Math.max(0, Math.min(100, 100 * ap/(ap+as))) + '%';
+  }
+  if (waiting && j.result && !j.pending) {
+    var r = j.result; waiting = null;
+    // Built from nodes, not from a string (2.1.1). `r.error` and `r.pose`
+    // come out of a device EVENT via the web's MQTT client: text a device
+    // wrote, shown to the supervisor. innerHTML would have run it as markup —
+    // and a device is exactly the party whose firmware may have been
+    // exchanged (finding Philine 2026-09-15). textContent cannot be run.
+    var box = el('capmsg'); box.textContent = '';
+    var piece = function(text, color){ var n = document.createElement('span'); n.textContent = text; if (color) n.style.color = 'var(--' + color + ')'; box.appendChild(n); };
+    if (r.event === 'pose_captured') {
+      if (r.saved) piece('Gespeichert: ', 'ok');
+      else piece('Nicht gespeichert' + (r.error ? ' (' + r.error + ')' : '') + ': ', 'err');
+      piece((r.pose === 'stand' ? 'stehend' : 'auf allen vieren') + ' — ');
+      if (r.still) piece('ruhige Messung'); else piece('Bewegung während der Messung, besser wiederholen', 'warn');
+      if (r.separation !== undefined) piece(' · Abstand ' + r.separation + '°');
+      if (r.saved) setTimeout(function(){ location.reload(); }, 1500);
+    } else piece('Messung fehlgeschlagen: ' + (r.error || ''), 'err');
+  }
+}).catch(function(){}); }
+setInterval(upd, 500); upd();
+</script>{% endblock %}

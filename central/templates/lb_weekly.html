@@ -1,0 +1,51 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Wochenplan{% endblock %}
+{% block content %}
+<h1>{{ _('Wochenplan') }} <span class="muted small">{{ _('Aufgabenliste je Sklave und Woche') }}</span></h1>
+<div class="row" style="align-items:flex-end">
+  <form method="get" style="flex:0 0 260px"><label>{{ _('Woche') }}</label><select name="week" onchange="this.form.submit()">{% for w in weeks %}<option value="{{ w }}" {{ 'selected' if week==w }}>{{ w }}{{ ' (' + _('aktuell') + ')' if w==cur_week }}{{ ' (' + _('nächste') + ')' if w==next_week }}</option>{% endfor %}</select></form>
+  <form method="post" action="{{ url_for('lb.weekly_action') }}" class="row" style="flex:1 1 auto;align-items:flex-end"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="week" value="{{ week }}">
+    <div style="flex:0 0 auto"><button name="what" value="propose" title="{{ _('Die Zentrale erzeugt aus Rang, Stufen und Verlauf einen tagesfüllenden Plan — sofort gültig') }}">{{ _('Plan erzeugen') }}</button></div>
+    {% if has_proposed %}<div style="flex:0 0 auto"><button name="what" value="confirm_all" title="{{ _('Ältere Vorschläge dieser Woche gültig setzen') }}">{{ _('Alte Vorschläge gültig setzen') }}</button></div>{% endif %}
+    <div style="flex:0 0 auto"><button name="what" value="review" class="danger" onclick="return confirm('Wochenbewertung für die Vorwoche jetzt ausführen? Ränge ändern sich.')" title="{{ _('Läuft sonst automatisch am Montag') }}">{{ _('Wochenbewertung Vorwoche') }}</button></div>
+  </form>
+</div>
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Was hier eingestellt wird') }}</h2>
+  <p class="small muted" style="margin-top:0">{{ _('Der Wochenplan sagt') }} <b>{{ _('was') }}</b> {{ _('trainiert wird, der') }}
+  {% if day_enabled %}<a href="{{ url_for('lb.dayplans_view') }}">{{ _('Tagesplan') }}</a>{% else %}{{ _('Tagesplan') }}{% endif %} {{ _('sagt') }}
+  <b>{{ _('wann') }}</b>{{ _('. Die Zentrale') }} <b>{{ _('streckt') }}</b> {{ _('den Wochenplan über die Woche: in jedem Trainingsblock nimmt sie die nächste offene Aufgabe und lässt dazu das passende Programm des Sklaven laufen. Es gibt hier keinen Startknopf — der Tag beginnt mit der Anmeldung.') }}</p>
+  <table><tbody>
+    <tr><td style="width:180px"><b>{{ _('Aufgabe') }}</b></td><td class="small">{{ _('Was geübt wird. Wählbar ist nur, was zu den
+      Geräten des Sklaven passt; alles andere kann er nicht erfüllen.') }}</td></tr>
+    <tr><td><b>{{ _('Ziel') }}</b></td><td class="small">{{ _('Der Zielwert der Aufgabe in ihrer eigenen Einheit — Dauer in Sekunden/Minuten, sonst eine Anzahl (Treffer, Runden, Wiederholungen). Der Zielwert der Planaufgabe') }}
+      <b>{{ _('überschreibt') }}</b> {{ _('den Wert im Programm, damit Plan und Programm nicht auseinanderlaufen.') }}</td></tr>
+    <tr><td><b>{{ _('erlaubte Strafen') }}</b></td><td class="small">{{ _('Wie viele Bestrafungen der Durchgang verträgt, bevor er als
+      nicht bestanden gilt. Die Hüllkurven der Geräte und') }} <span class="mono">config.ini [safety]</span> {{ _('stehen
+      darüber — eine Zahl hier hebt keine Grenze an.') }}</td></tr>
+    <tr><td><b>{{ _('Art') }}</b></td><td class="small"><b>{{ _('Plan') }}</b> {{ _('= regulär,') }} <b>{{ _('Nachsitzen') }}</b> {{ _('= aus einer Regel entstanden,') }}
+      <b>{{ _('Herausforderung') }}</b> {{ _('= Teil der Bestenliste über alle Sklaven.') }}</td></tr>
+    <tr><td><b>Status</b></td><td class="small"><b>{{ _('vorgeschlagen') }}</b> {{ _('= von der Zentrale erzeugt, wird montags automatisch aktiv;') }} <b>{{ _('offen') }}</b> {{ _('= zählt;') }} <b>{{ _('bestanden') }}</b> / <b>{{ _('nicht bestanden') }}</b> {{ _('= abgeschlossen. Der Plan gilt als vollständig, wenn alle Plan- und Nachsitz-Aufgaben bestanden sind.') }}</td></tr>
+  </tbody></table>
+</div>
+{% for s in slaves %}
+<div class="panel">
+  <h2 style="margin-top:0"><a href="{{ url_for('slave_detail', sid=s.slave_id) }}#rang">{{ s.slave_name }}</a> <span class="rankbadge">{{ _('Rang') }} {{ s.rank }}</span>
+    {% if s.forecast %}<span class="forecast {{ s.forecast.risk }}" style="display:inline-block;margin:0 0 0 10px;padding:2px 10px">{{ s.forecast.text }}</span>{% endif %}</h2>
+  <table><thead><tr><th>{{ _('Aufgabe') }}</th><th>{{ _('Ziel') }}</th><th>{{ _('erlaubte Strafen') }}</th><th>{{ _('Art') }}</th><th>Status</th><th>{{ _('von') }}</th></tr></thead><tbody>
+  {% for t in s.tasks %}<tr>
+    <td>{{ t.wt_action|action_name }}
+      {% if t.missing %}<span class="cap miss" title="{{ _('Der Sklave hat kein Gerät mit dieser Funktion — er kann die Aufgabe nicht erfüllen') }}">{{ t.cap_label }} {{ _('fehlt') }}</span>
+      {% elif t.unknown_dev %}<span class="cap extra" title="{{ _('In der Anlage ist überhaupt kein Gerät mit dieser Funktion eingetragen') }}">{{ _('kein Gerät in der Anlage') }}</span>{% endif %}</td>
+    <td>{{ t.wt_target|target_text(t.unit) }}</td><td>{{ t.wt_max_punish }}</td>
+    <td>{{ {'plan':'Plan','detention':'Nachsitzen','challenge':'Herausforderung'}[t.wt_kind] }}</td>
+    <td class="plan-status {{ t.wt_status }}"><b>{{ _({'proposed':'vorgeschlagen','open':'offen','done':'bestanden','failed':'nicht bestanden'}[t.wt_status]) }}</b></td>
+    <td class="small muted">{{ t.wt_by }}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">{{ _('Kein Plan für diese Woche — auf der Sklavenseite anlegen oder Vorschlag erzeugen.') }}</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endfor %}
+<p class="small muted">{{ _('Die Zentrale erzeugt den Plan sonntags automatisch für die nächste Woche (Einstellung') }}
+<span class="mono">{{ _('auto_plan') }}</span>{{ _(', Umfang') }} <span class="mono">{{ _('plan_day_tasks') }}</span> {{ _('Aufgaben je Tag) — er ist') }}
+<b>{{ _('sofort gültig') }}</b> {{ _('und wartet nicht auf eine Bestätigung; die Aufsicht ändert, ergänzt oder löscht ihn hier. Ein Plan gilt als vollständig, wenn alle Plan- und Nachsitz-Aufgaben bestanden sind; unvollständig = Abstieg bei der Wochenbewertung.') }}</p>
+{% endblock %}

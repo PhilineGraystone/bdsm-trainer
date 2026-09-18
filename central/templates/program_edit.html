@@ -1,0 +1,11 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Programm{% endblock %}
+{% block content %}
+<h1>{{ _('Programm bearbeiten') if row else _('Neues Programm') }}</h1>
+<div class="panel" style="max-width:640px"><form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}">
+  <label>{{ _('Name') }}</label><input name="pro_name" value="{{ row.pro_name if row else '' }}" required maxlength="120" autofocus>
+  <label>{{ _('Beschreibung (wird auf der Anzeige genannt)') }}</label><input name="pro_functions" value="{{ row.pro_functions if row else '' }}" maxlength="255">
+  <p style="margin-top:16px"><button class="primary">{{ _('Speichern') }}</button> <a class="btn" href="{{ url_for('program_detail', pid=row.pro_id) if row else url_for('programs') }}">{{ _('Abbrechen') }}</a></p>
+</form></div>
+{% if row %}<div class="panel" style="max-width:640px"><form method="post" action="{{ url_for('program_delete', pid=row.pro_id) }}" onsubmit="return confirm('Programm mit allen Schritten löschen?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="danger">{{ _('Programm löschen') }}</button> <span class="small muted">{{ _('nur möglich, wenn kein Sklave es zugeordnet hat.') }}</span></form></div>{% endif %}
+{% endblock %}

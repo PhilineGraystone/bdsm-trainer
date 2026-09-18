@@ -1,0 +1,50 @@
+# Punisher — Abhaengigkeiten der Zentrale
+#
+# Installation auf dem Raspberry Pi:
+#     python3 -m pip install -r requirements.txt
+#
+# Auf Raspberry Pi OS kommen mehrere dieser Pakete auch als Systempaket
+# (python3-flask, python3-pymysql, python3-pil, python3-pygame, python3-rpi.gpio,
+# python3-spidev). Wer die nimmt, braucht hier nur den Rest.
+#
+# KEINE Versionsnagelung: die Anlage laeuft auf dem, was die Distribution
+# mitbringt, und ein Pin waere hier eine Zusage, die niemand nachprueft. Wo eine
+# Mindestversion noetig ist, steht sie dabei.
+
+# --- Web (Aufsichtsoberflaeche) ---------------------------------------------
+Flask>=2.0
+itsdangerous            # signierte Sitzungen; kommt mit Flask, wird direkt benutzt
+MarkupSafe              # dito, wird direkt benutzt
+
+# --- Datenbank ---------------------------------------------------------------
+PyMySQL>=1.0
+
+# --- MQTT --------------------------------------------------------------------
+# Das Programm spricht die API von paho-mqtt 2.x: der Client wird mit
+# CallbackAPIVersion.VERSION2 gebaut, und die Rueckrufe haben die Signatur
+# dieser Fassung (on_connect mit connect_flags und properties). Mit 1.x startet
+# die Zentrale nicht.
+#
+# Hier stand bis zum 14.09.2026 das Gegenteil (>=1.6,<2.0) — ein Rest aus der
+# Zeit vor der Umstellung. Wer danach neu installiert haette, bekaeme eine 1.x
+# und einen Startfehler, den nichts erklaert.
+paho-mqtt>=2.0
+
+# --- Anzeige (punisher-display.py, HDMI) -------------------------------------
+pygame>=2.0
+Pillow                  # Fotos, Themenbilder, Notensymbole
+
+# --- Zeugnis und Export ------------------------------------------------------
+reportlab               # PDF
+
+# --- Raspberry-Pi-Hardware ---------------------------------------------------
+# Nur auf dem Pi installierbar. Auf einem Arbeitsplatzrechner weglassen; die
+# Zentrale laeuft dort nicht, das Webinterface schon.
+RPi.GPIO                # buttons, LEDs
+spidev                  # MFRC522 RFID reader
+smbus2                  # I2C for the character display (system `smbus` also works)
+#
+# The LCD hangs on I2C. `libs/lcddriver.py` takes smbus2 if it is installed and
+# falls back to smbus, which Raspberry Pi OS ships as a system package - so
+# neither is pinned here. What IS needed: I2C switched on (raspi-config) and
+# membership in the groups spi, i2c and gpio.

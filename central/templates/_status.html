@@ -1,0 +1,124 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% import '_collar.html' as coll %}
+<div class="grid">
+  <div class="panel">
+    <h2 style="margin-top:0">{{ _('Zentrale') }}</h2>
+    <div class="kv">
+      <div>{{ _('Heartbeat') }}</div><div><span class="status-dot {{ 'on' if s.central_alive }}"></span>{% if s.central_alive %}{{ _('läuft') }}{% elif s.central_hb_age is none %}{{ _('noch nichts empfangen') }}{% else %}{{ _('seit {n} s still', n=s.central_hb_age) }}{% endif %}</div>
+      <div>Broker</div><div><span class="status-dot {{ 'on' if s.mqtt_connected }}"></span>{{ 'verbunden' if s.mqtt_connected else ('getrennt ' ~ (s.mqtt_error or '')) }}</div>
+      <div>{{ _('Geräte online') }}</div><div>{{ _('{a} von {b} bekannt', a=s.devices|selectattr('online')|list|length, b=s.devices|length) }}</div>
+      {# RED OR GREEN, for the whole installation (doc 42 point 2). One line:
+         either everything is green, or the devices that are not — and why,
+         in the same breath. No percentage; a percentage would have to be
+         looked up. #}
+      <div>{{ _('Gesundheit') }}</div><div>
+        {% if s.health_red %}<span class="health red"></span><b>{{ _('{n} Gerät(e) rot', n=s.health_red|length) }}</b>:
+          {% for d in s.health_red %}<span class="small">{{ d.label }} — {{ d.health.text() }}</span>{% if not loop.last %} · {% endif %}{% endfor %}
+        {% else %}<span class="health"></span>{{ _('alle Geräte grün') }}{% endif %}</div>
+      {% if s.last_unknown_rfid %}<div>{{ _('Unbekannter Tag') }}</div><div class="mono">{{ s.last_unknown_rfid.rfid }} <span class="muted small">({{ s.last_unknown_rfid.ts_ms|ts }})</span> · <a href="{{ url_for('slave_edit') }}">{{ _('Sklaven anlegen') }}</a>
+        <form method="post" action="{{ url_for('unknown_rfid_dismiss') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm">{{ _('verwerfen') }}</button></form></div>{% endif %}
+    </div>
+  </div>
+  <div class="panel emgbox">
+    <h2 style="margin-top:0;color:#ffb3b8">{{ _('Eingriff') }}</h2>
+    <div class="row">
+      <form method="post" action="{{ url_for('stop_all') }}" onsubmit="return confirm('Stopp an alle Geräte senden?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="danger" style="width:100%">{{ _('STOPP alle Geräte') }}</button>
+        <div class="small muted" style="margin-top:4px">{{ _('Sicherer Zustand, Geräte bleiben bedienbar.') }}</div></form>
+      <form method="post" action="{{ url_for('emergency') }}" onsubmit="return confirm('EMERGENCY an ALLE Geräte? Sperre bis zum Aus-/Einschalten!')"><input type="hidden" name="_csrf" value="{{ csrf }}">
+        <input name="confirm" placeholder="{{ _('EMERGENCY eintippen') }}" autocomplete="off" style="margin-bottom:6px"><button class="emg" style="width:100%">EMERGENCY</button>
+        <div class="small muted" style="margin-top:4px">{{ _('Alles lösen, Geräte einfrieren bis Power-Cycle. Der Not-Aus-Bumper bleibt der harte Weg.') }}</div></form>
+    </div>
+  </div>
+</div>
+
+
+{% if s.session and s.session.slaves %}
+<div class="panel"><h2 style="margin-top:0">{{ _('Angemeldete Sklaven') }}</h2>
+  <table><thead><tr><th>{{ _('Sklaven') }}</th><th>{{ _('Rang · Punkte') }}</th><th>{{ _('Programm') }}</th><th>{{ _('Schritt') }}</th><th>{{ _('Laufende Durchgänge') }}</th><th>{{ _('Prognose') }}</th><th>{{ _('Wochenplan') }}</th></tr></thead><tbody>
+  {% for sl in s.session.slaves %}{% set L = sl.logbook %}<tr>
+    <td><a href="{{ url_for('slave_detail', sid=sl.slave_id) }}#rang"><b>{{ sl.name }}</b></a><br><span class="small muted">{{ _('seit') }} {{ sl.login_ts|ts }}</span></td>
+    <td>{% if L %}<span class="rankbadge">{{ L.rank }} · {{ L.rank_name }}</span><br><span class="small">{{ L.score_week }} P{% if L.place_week %} · {{ _('Platz') }} {{ L.place_week }}{% endif %} · {{ _('gesamt') }} {{ L.points_total }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+    <td>{{ sl.program.name or '–' }}</td>
+    <td class="small">{% set pg = sl.progress %}{% if pg %}{% if pg.finished %}{{ _('beendet') }}{% else %}{{ pg.pos + 1 }} / {{ pg.total }}{% if pg.waiting_for %} · {{ _('wartet auf') }} {{ pg.waiting_for.action|action_name }} ({{ pg.waiting_for.elapsed_s }} s){% elif pg.next_in_s %} · {{ _('nächster in') }} {{ pg.next_in_s }} s{% endif %}{% endif %}{% endif %}</td>
+    <td class="small">{% if L %}{% for r in L.runs %}{{ r.action|action_name }} <span class="muted">{{ r.elapsed_s }} s · {{ r.punish }} {{ _('Str.') }}</span><br>{% else %}<span class="muted">–</span>{% endfor %}{% endif %}
+      {% if sl.attention %}<span class="pill act">{{ _('Aufmerksamkeit') }} {{ sl.attention.hits }}/{{ sl.attention.cues }}</span>{% endif %}</td>
+    <td class="small">{% if L %}<span class="forecast {{ L.forecast.risk }}" style="display:inline-block;margin:0;padding:2px 8px">{{ L.forecast.text }}</span>{% endif %}</td>
+    <td class="small">{% if L %}{% for t in L.plan %}<span class="plan-status {{ t.wt_status }}">{{ '☑' if t.wt_status=='done' else '☐' }}</span> {{ t.name }} {{ t.target_text }}<br>{% else %}<span class="muted">{{ _('kein Plan') }}</span>{% endfor %}{% endif %}</td>
+  </tr>{% endfor %}</tbody></table>
+</div>
+{% endif %}
+{% if s.leaderboard and s.leaderboard.week %}
+<div class="panel"><h2 style="margin-top:0">{{ _('Rangliste dieser Woche') }} <a class="btn sm" href="{{ url_for('lb.leaderboard_view') }}" style="float:right">{{ _('alle') }}</a></h2>
+  <table><tbody>{% for e in s.leaderboard.week[:5] %}<tr><td><b>{{ e.place }}</b></td><td>{{ e.name }}</td><td><span class="rankbadge">{{ e.rank }} · {{ e.rank_name }}</span></td><td><b>{{ e.points }}</b> P</td><td class="muted small">{{ e.punish }} {{ _('Strafen') }}</td></tr>{% endfor %}</tbody></table>
+</div>
+{% endif %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Geräte') }}</h2>
+  <table><thead><tr><th>{{ _('Gerät') }}</th><th>{{ _('Modell / FW') }}</th><th>Status</th><th>{{ _('Sklaven') }}</th><th>{{ _('Zustand') }}</th><th>{{ _('zuletzt') }}</th><th></th></tr></thead><tbody>
+  {% for d in s.devices %}
+  <tr>
+    <td><span class="health {{ d.health.colour }}" title="{{ d.health.text() if d.health.red else _('alles in Ordnung') }}"></span><b>{{ d.label }}</b>{% if not d.db %} <span class="pill act">{{ _('nicht angelegt') }}</span>{% endif %}<br><span class="mono muted">{{ d.uuid }}</span>
+      {% if d.health.red %}<ul class="health-list">{% for k, t, m in d.health.reasons %}<li>{{ t }}{% if d.health.ackable(k) %} <form method="post" action="{{ url_for('device_ack', uuid=d.uuid) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ k }}"><button class="sm" title="{{ _('Zur Kenntnis genommen — bis sich der Inhalt ändert') }}">{{ _('quittieren') }}</button></form>{% endif %}</li>{% endfor %}</ul>{% endif %}{% if d.health.acked %}<ul class="health-list muted">{% for k, t, m, by, at in d.health.acked %}<li>{{ t }} <span class="small">({{ _('quittiert von {b}, {a}', b=by, a=at) }})</span><form method="post" action="{{ url_for('device_ack', uuid=d.uuid) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ k }}"><input type="hidden" name="undo" value="1"><button class="sm">{{ _('zurücknehmen') }}</button></form></li>{% endfor %}</ul>{% endif %}</td>
+    <td>{{ d.model }}<br><span class="small muted">{{ d.hello.fw_version or d.state.fw or '' }}{% if d.state.ip %} · {{ d.state.ip }}{% endif %}{% if d.state.rssi %} · {{ d.state.rssi }} dBm{% endif %}</span></td>
+    <td>{% if not d.online %}<span class="pill off">{{ _('offline') }}</span>{% elif d.state.state=='emergency' %}<span class="pill emg">EMERGENCY</span>{% elif d.state.state=='active' %}<span class="pill act">{{ _('aktiv') }}</span>{% else %}<span class="pill on">{{ d.state.state or 'online' }}</span>{% endif %}</td>
+    <td>{% if d.state.slave_id %}{{ d.state.slave_name }} <span class="muted small">#{{ d.state.slave_id }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+    <td class="small">
+      {% set st = d.state %}
+      {% if st.lock %}{{ _('Schloss') }}: <b>{{ st.lock }}</b>{% if st.remaining_s %} · {{ _('Rest') }} {{ (st.remaining_s // 60) }}:{{ '%02d' % (st.remaining_s % 60) }}{% endif %}
+        {% if st.magnets %}<br>{% for m in st.magnets %}<span class="pill {{ 'on' if m.bond else ('act' if m.avail else '') }}">{{ loop.index }}</span> {% endfor %}{% endif %}{% endif %}
+      {# Collar: what the device sees right now, and SINCE WHEN. The duration was
+         the missing part - "she is being punished" carries no information,
+         "out of position for 0:14" does (Philine 2026-09-11). #}
+      {% if st.mode is defined %}{{ _('Modus') }}: <b>{{ st.mode }}</b>{% if st.remaining_s %} · {{ _('Rest') }} {{ (st.remaining_s // 60) }}:{{ '%02d' % (st.remaining_s % 60) }}{% endif %}<br>
+        {{ coll.collar_line(st) }}
+        <span class="muted small">{{ _('Impuls') }} {{ st.shock }} · {{ _('Vibration') }} {{ st.vibe }} · {{ _('Ton') }} {{ st.beep }} · {{ st.tx_ms }} ms · {{ _('{n} Impulse insgesamt', n=st.shocks) }}</span>
+
+        {% if st.angle is defined %}<br><span class="muted small">{{ _('Neigung') }} {{ st.angle }}°{% if st.tolerance is defined %} / {{ st.tolerance }}°{% endif %}</span>{% endif %}{% endif %}
+      {# E-Stim bridge: WHICH Coyote is attached to it and whether it is emitting
+         right now. Nothing stood in this place so far — you could not even see
+         whether any device at all was connected (Philine 2026-09-11). #}
+      {% if st.coyote is defined %}
+        {% if st.ble %}Coyote <b>{{ st.coyote|upper }}</b>{% if st.address %} <span class="mono">{{ st.address }}</span>{% endif %}
+          {% if st.bound %}<span class="pill on" title="{{ _('nur dieses Gerät') }}">{{ _('fest') }}</span>{% else %}<span class="pill" title="{{ _('nimmt die erste Coyote, die antwortet') }}">{{ _('frei') }}</span>{% endif %}
+        {% else %}<span class="pill off">{{ _('keine Coyote') }}</span>{% if st.bound %} <span class="muted">{{ _('wartet auf') }} <span class="mono">{{ st.bound }}</span></span>{% endif %}{% endif %}
+        <br><span class="muted">{{ _('Ausgabe') }}: <b>{{ st.estim }}</b> · A {{ st.a }} % · B {{ st.b }} %{% if st.ceiling_a or st.ceiling_b %} · {{ _('Decke') }} {{ st.ceiling_a }}/{{ st.ceiling_b }} %{% endif %}{% if st.no_strength %} · <span style="color:var(--err)">{{ _('Stärke kommt nicht an') }}</span>{% endif %}{% if st.day_s %} · {{ _('heute') }} {{ st.day_s }} s{% endif %}</span>
+        {# The peak of the last run. A waveform as short as 5 s is over before
+           anyone looks — so the live value on its own fails to answer "was
+           there any output?" (finding by Philine 2026-09-11). #}
+        {% if st.peak_a is defined and (st.peak_a or st.peak_b) %}<br><span class="muted small">{{ _('Spitze des letzten Laufs') }}:
+          <b>A {{ st.peak_a }} %</b> · <b>B {{ st.peak_b }} %</b></span>{% endif %}
+        {# Stack and heap reserve: a crash from stack overflow fails to report
+           itself over USB-CDC on the S3. If the number drops towards zero as a
+           waveform starts, you learn about it anyway (finding 2026-09-11). #}
+        {# Which one restarts? `drops` counts the aborts of the Coyote, `uptime_s`
+           runs with the bridge. If the runtime jumps back, it was the
+           bridge; if `drops` rises while the runtime carries on, it was the Coyote.
+           Without these two numbers, "it restarts" cannot be told apart. #}
+        {% if st.uptime_s is defined %}<br><span class="muted small">{{ _('Bridge läuft seit') }}
+          <b>{{ '%d:%02d:%02d'|format(st.uptime_s // 3600, (st.uptime_s % 3600) // 60, st.uptime_s % 60) }}</b>
+          {% if st.drops %} · <span style="color:var(--warn)">{{ _('{n} Abbrüche der Coyote', n=st.drops) }}</span>{% endif %}</span>{% endif %}
+        {% if st.stack_free is defined %}<br><span class="muted small">{{ _('Reserve') }}:
+          <span class="mono{{ ' ' }}{{ 'warn' if st.stack_free < 1024 }}">{{ st.stack_free }} B {{ _('Stack') }}</span> ·
+          <span class="mono">{{ (st.heap_free / 1024)|int }} kB {{ _('Heap') }}</span>
+          {% if st.stack_free < 1024 %}<span class="pill warn">{{ _('knapp') }}</span>{% endif %}</span>{% endif %}
+      {% endif %}
+      {% if d.last_event %}<br><span class="muted">{{ _('letztes Ereignis') }}: {{ d.last_event.event }}</span>{% endif %}
+    </td>
+    <td class="small muted">{% if d.age_s is not none %}{{ _('vor') }} {{ d.age_s }} s{% endif %}</td>
+    <td class="actions">
+      <form method="post" action="{{ url_for('device_cmd', uuid=d.uuid, action='stop') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm danger" {{ 'disabled' if not d.online }}>{{ _('Stopp') }}</button></form>
+      <form method="post" action="{{ url_for('device_cmd', uuid=d.uuid, action='identify') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm" {{ 'disabled' if not d.online }}>{{ _('Blinken') }}</button></form>
+      {% if not d.db %}<a class="btn sm" href="{{ url_for('device_edit', uuid=d.uuid) }}">{{ _('Anlegen') }}</a>{% endif %}
+    </td>
+  </tr>
+  {% else %}<tr><td colspan="7" class="muted">{{ _('Noch kein Gerät gesehen.') }}</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+
+<div class="grid">
+  <div class="panel"><h2 style="margin-top:0">{{ _('Ereignisse (live, MQTT)') }}</h2>
+    <table><tbody>{% for e in s.events[:20] %}<tr><td class="small muted" style="white-space:nowrap">{{ e.t|ts }}</td><td class="small">{% if e.device %}<span class="mono">{{ e.device[:8] }}</span>{% else %}{{ _('Zentrale') }}{% endif %}</td><td><b>{{ e.event }}</b> <span class="small muted mono">{{ e.data|jsonpretty|truncate(90) }}</span></td></tr>{% else %}<tr><td class="muted">{{ _('Seit dem Start des Webinterface noch keine Ereignisse.') }}</td></tr>{% endfor %}</tbody></table></div>
+  <div class="panel"><h2 style="margin-top:0">{{ _('Protokoll (Datenbank)') }}</h2>
+    <table><tbody>{% for r in s.recent_audit %}<tr><td class="small muted" style="white-space:nowrap">{{ r.al_ts|ts }}</td><td class="small">{{ r.al_source }}/{{ r.al_kind }}</td><td><b>{{ r.al_action }}</b> {% if r.al_device %}<span class="mono small muted">{{ r.al_device[:8] }}</span>{% endif %}{% if r.al_slave_id %}<span class="small muted"> #{{ r.al_slave_id }}</span>{% endif %}</td></tr>{% else %}<tr><td class="muted">{{ _('Leer — Migration 003 eingespielt?') }}</td></tr>{% endfor %}</tbody></table>
+    <p class="small"><a href="{{ url_for('audit_view') }}">{{ _('Vollständiges Protokoll →') }}</a></p></div>
+</div>

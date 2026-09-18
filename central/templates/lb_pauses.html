@@ -1,0 +1,37 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Pausen{% endblock %}
+{% block content %}
+<h1>{{ _('Pause und Urlaub') }} <span class="muted small">{{ _('die Woche steht') }}</span></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Während einer Pause öffnet keine Anmeldung einen Tag, keine Regel feuert, keine Wochenaufgabe wird fällig, der Kanal schweigt. Eine Woche, die ganz in der Pause liegt, wird nicht bewertet: der Rang bleibt, offene Planaufgaben rücken in die nächste Woche, Serien überbrücken die Tage. Im Zeugnis steht „pausiert“ — nicht „nicht angetreten“.') }}
+  {{ _('Eine Pause endet mit ihrem Datum. Wer sie früher beenden will, löscht sie.') }}</p>
+</div>
+
+<div class="panel">
+<table><thead><tr><th>{{ _('Für wen') }}</th><th>{{ _('Von') }}</th><th>{{ _('Bis') }}</th><th>{{ _('Grund') }}</th><th></th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr {{ 'style=opacity:.45' if r.state == 'past' }}>
+  <td>{% if r.pa_slave %}<a href="{{ url_for('slave_detail', sid=r.pa_slave) }}">{{ r.slave_name or r.pa_slave }}</a>{% else %}<b>{{ _('alle') }}</b>{% endif %}</td>
+  <td class="mono">{{ r.pa_from.strftime('%d.%m.%Y') }}</td><td class="mono">{{ r.pa_to.strftime('%d.%m.%Y') }}</td>
+  <td class="small">{{ r.pa_reason }}{% if r.pa_by %} <span class="muted mono">({{ r.pa_by }})</span>{% endif %}</td>
+  <td class="small">{% if r.state == 'active' %}<span class="pill warn">{{ _('läuft') }}</span>{% elif r.state == 'coming' %}<span class="pill act">{{ _('kommt') }}</span>{% else %}<span class="muted">{{ _('vorbei') }}</span>{% endif %}</td>
+  <td class="actions">{% if r.state != 'past' %}<form class="inline" method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="pa_id" value="{{ r.pa_id }}">
+    <button name="op" value="delete" class="sm danger" onclick="return confirm('{{ _('Pause beenden? Ab sofort gilt wieder alles.') }}')">{{ _('beenden') }}</button></form>{% endif %}</td>
+</tr>{% else %}<tr><td colspan="6" class="muted">{{ _('Keine Pause eingetragen.') }}</td></tr>{% endfor %}
+</tbody></table>
+<p class="small"><a href="{{ url_for('lb.pauses_view', all=(None if show_all else 1)) }}">{{ _('nur laufende und kommende') if show_all else _('auch vergangene zeigen') }}</a></p>
+</div>
+
+<div class="panel" style="max-width:640px"><h2 style="margin-top:0">{{ _('Pause eintragen') }}</h2>
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+    <label>{{ _('Für wen') }}</label>
+    <select name="slave"><option value="0">{{ _('alle — die ganze Anlage') }}</option>{% for s in slaves %}<option value="{{ s.slave_id }}">{{ s.slave_name }}</option>{% endfor %}</select>
+    <div class="row">
+      <div><label>{{ _('Von') }}</label><input type="date" name="from" value="{{ today.isoformat() }}" required></div>
+      <div><label>{{ _('Bis (einschließlich)') }}</label><input type="date" name="to" value="{{ today.isoformat() }}" required></div>
+    </div>
+    <label>{{ _('Grund') }}</label><input name="reason" maxlength="160" placeholder="{{ _('Urlaub, krank, Umbau — steht im Protokoll und auf ihrer Seite') }}">
+    <p style="margin-top:14px"><button class="primary">{{ _('Eintragen') }}</button></p>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Logbuch{% endblock %}
+{% block content %}
+<h1>{{ _('Logbuch') }} <span class="muted small">{{ _('Durchgänge trainierbarer Aufgaben mit Note und Punkten') }}</span></h1>
+<form method="get" class="panel row" style="align-items:flex-end">
+  <div><label>{{ _('Sklaven') }}</label><select name="slave"><option value="">{{ _('alle') }}</option>{% for s in slaves %}<option value="{{ s.slave_id }}" {{ 'selected' if f.slave==s.slave_id|string }}>{{ s.slave_name }}</option>{% endfor %}</select></div>
+  <div><label>{{ _('Aufgabe') }}</label><select name="action"><option value="">{{ _('alle') }}</option>{% for a in actions_all %}<option value="{{ a.code }}" {{ 'selected' if f.action==a.code }}>{{ a.name }}</option>{% endfor %}<option value="BONUS_WEEK" {{ 'selected' if f.action=='BONUS_WEEK' }}>{{ _('Bonus: Wochenplan') }}</option></select></div>
+  <div><label>{{ _('Woche') }}</label><select name="week"><option value="">{{ _('alle') }}</option>{% for w in weeks %}<option value="{{ w }}" {{ 'selected' if f.week==w }}>{{ w }}{{ ' (aktuell)' if w==cur_week }}</option>{% endfor %}</select></div>
+  <div><label>Status</label><select name="status"><option value="">{{ _('alle') }}</option>{% for st in ('done','failed','aborted','running') %}<option value="{{ st }}" {{ 'selected' if f.status==st }}>{{ st }}</option>{% endfor %}</select></div>
+  <div style="flex:0 0 auto"><button class="primary">{{ _('Filtern') }}</button></div>
+</form>
+<div class="panel"><table><thead><tr><th>{{ _('Zeit') }}</th><th>{{ _('Sklaven') }}</th><th>{{ _('Aufgabe') }}</th><th>{{ _('Stufe') }}</th><th>{{ _('Ziel') }}</th><th>{{ _('Dauer') }}</th><th>{{ _('Strafen') }}</th><th>{{ _('Note') }}</th><th>{{ _('Punkte') }}</th><th>Status</th><th>{{ _('Metriken') }}</th></tr></thead><tbody>
+{% for r in rows %}<tr>
+  <td class="small muted" style="white-space:nowrap">{{ r.ach_started|ts }}</td>
+  <td><a href="{{ url_for('slave_detail', sid=r.ach_slave) }}#rang">{{ r.slave_name }}</a></td>
+  <td>{{ r.ach_action|action_name }}</td>
+  <td>{{ r.ach_level }}</td>
+  <td>{{ r.ach_target|target_text(r.ach_target_unit) }}</td>
+  <td>{% if r.ach_duration_s is not none %}{{ r.ach_duration_s|target_text('s') }}{% endif %}</td>
+  <td>{{ r.ach_punish }}{% if r.ach_max_punish is not none and not r.ach_action.startswith('BONUS') %} <span class="muted small">/ {{ r.ach_max_punish }}</span>{% endif %}{% if r.ach_warn %} <span class="muted small">({{ r.ach_warn }} W)</span>{% endif %}</td>
+  <td class="gradecell">{% if r.ach_grade and r.ach_grade != '-' %}{{ r.ach_grade|grade_icon }}{{ r.ach_grade }}{% elif r.ach_grade == '-' %}<span class="muted">{{ _('Bonus') }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+  <td><b>{{ r.ach_points }}</b>{% if r.ach_best %} <span class="pill on" title="{{ _('persönliche Bestleistung') }}">{{ _('Best') }}</span>{% endif %}{% if not r.ach_counted %} <span class="pill" title="{{ _('zählt nicht für die Rangliste (Anti-Grinding)') }}">{{ _('n. gezählt') }}</span>{% endif %}</td>
+  <td><span class="pill {{ 'on' if r.ach_status=='done' else ('act' if r.ach_status=='running' else 'off') }}">{{ r.ach_status }}</span></td>
+  <td class="small muted">{{ r.metrics|metrics_text }}{% if r.ach_note %} · {{ r.ach_note }}{% endif %}</td>
+</tr>{% else %}<tr><td colspan="11" class="muted">{{ _('Noch keine Durchgänge.') }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="small muted">{{ _('Note: schlechtere Teilnote aus erreichtem Ziel und Bestrafungen (0 = A, ≤ erlaubt = B, ≤ 2× = C …). Punkte = Stufe × Basis × Notenfaktor − Malus je Bestrafung + Boni (Bestleistung, Serie, Wochenplan). Je Aufgabe und Tag zählen nur die besten Durchgänge für die Rangliste.') }}</p>
+{% endblock %}

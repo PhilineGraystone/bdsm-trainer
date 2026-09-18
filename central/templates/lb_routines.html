@@ -1,0 +1,84 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}{{ _('Wellenformen') }}{% endblock %}
+{% block content %}
+<h1>{{ _('Wellenformen') }} <span class="muted small">{{ _('Kurven für Trainer, Vibration und E-Stim') }}</span></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Eine Wellenform ist eine Kurve mit einer X-Achse, einem Zweck und einer oder mehreren Spuren. Eine Spur ist entweder die Zieltiefe, die nachgefahren und bewertet wird, oder ein Ausgang: Bestrafung, Stimulation oder Belohnung. Gemessen und ausgegeben wird immer in Prozent — nie in Millimetern und nie in Volt.') }}</p>
+  <p class="small muted"><b>{{ _('Die Stufe wählt die Wellenform') }}</b> — {{ _('sie skaliert kein Ziel. Ein Sklave auf Stufe 5 bekommt die Wellenform der Stufe 5; gibt es keine, gilt die nächstniedrigere. Der Zielwert der Planaufgabe ist die Mindestnote.') }}</p>
+  <p class="small muted" style="margin-bottom:0">{{ _('Die fünf Beispiele unten sind zum Vergleichen da: sie zeigen, wie eine brauchbare Kurve aussieht, und lassen sich kopieren.') }}</p>
+</div>
+
+<div class="panel">
+<table><thead><tr>
+  <th>{{ _('Stufe') }}</th><th>{{ _('Name') }}</th><th>{{ _('Was es ist') }}</th>
+  <th>{{ _('Stützpunkte') }}</th><th>{{ _('Mindestnote') }}</th><th></th>
+</tr></thead><tbody>
+{% for r in rows %}<tr>
+  <td>{% if r.ro_purpose == 'aufgabe' %}<span class="pill">{{ r.ro_level }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+  <td><a href="{{ url_for('lb.routine_edit', rid=r.ro_id) }}"><b>{{ r.ro_name }}</b></a>
+      {% if r.ro_example %} <span class="pill act">{{ _('Beispiel') }}</span>{% endif %}
+      {% if r.ro_note %}<br><span class="small muted">{{ r.ro_note }}</span>{% endif %}</td>
+  <td class="small">{{ r.summary }}</td>
+  <td>{{ r.ro_points }}</td>
+  <td>{% if r.ro_purpose == 'aufgabe' %}{{ r.ro_min_score }}{% else %}<span class="muted">—</span>{% endif %}</td>
+  <td class="actions"><a class="btn sm" href="{{ url_for('lb.routine_edit', rid=r.ro_id) }}">{{ _('Bearbeiten') }}</a></td>
+</tr>{% else %}<tr><td colspan="6" class="muted">{{ _('Noch keine Wellenform — unten eine anlegen.') }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+
+<div class="panel" id="neu">
+  <h2 style="margin-top:0">{{ _('Neue Wellenform') }}</h2>
+  <form method="post" action="{{ url_for('lb.routines_view') }}" class="row" style="align-items:flex-start">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div style="flex:1 1 220px"><label>{{ _('Name') }}</label><input name="name" maxlength="120" required></div>
+    <div style="flex:2 1 280px"><label>{{ _('Notiz') }}</label><input name="note" maxlength="255"></div>
+
+    <div style="flex:1 1 100%"></div>
+    <div style="flex:1 1 300px" class="explain">
+      <label>{{ _('X-Achse') }}</label>
+      <select name="axis" id="new_axis">
+        {% for k, v in AXES.items() %}<option value="{{ k }}" data-help="{{ v[2] }}">{{ v[0] }}</option>{% endfor %}
+      </select>
+      <p class="small muted" id="new_axis_help" style="margin:4px 0 0"></p>
+    </div>
+    <div style="flex:1 1 300px" class="explain">
+      <label>{{ _('Zweck') }}</label>
+      <select name="purpose" id="new_purpose">
+        {% for k, v in PURPOSES.items() %}<option value="{{ k }}" data-help="{{ v[1] }}">{{ v[0] }}</option>{% endfor %}
+      </select>
+      <p class="small muted" id="new_purpose_help" style="margin:4px 0 0"></p>
+    </div>
+
+    <div style="flex:1 1 100%"></div>
+    <div style="flex:0 0 90px"><label>{{ _('Stufe') }}</label>
+      <input type="number" name="level" min="1" max="{{ level_max }}" value="1"></div>
+    <div style="flex:0 0 110px"><label>{{ _('Toleranz (%)') }}</label>
+      <input type="number" name="tol_default" min="1" max="50" value="10"></div>
+    <div style="flex:0 0 130px"><label>{{ _('Vollausschlag (%)') }}</label>
+      <input type="number" name="fullscale_pct" min="5" max="100" value="{{ defaults.fullscale }}"></div>
+    <div style="flex:0 0 130px"><label>{{ _('Übergang (ms)') }}</label>
+      <input type="number" name="loop_ms" min="0" max="30000" step="100" value="1500"></div>
+    <div style="flex:0 0 130px"><label>{{ _('Mindestnote') }}</label>
+      <input type="number" name="min_score" min="0" max="10000" step="100" value="{{ defaults.min_score }}"></div>
+    <div style="flex:0 0 110px"><label>{{ _('Strafe') }}</label>
+      <input type="number" name="punish_level" min="0" max="3" value="1"></div>
+    <div style="flex:0 0 110px"><label>{{ _('Belohnung') }}</label>
+      <input type="number" name="reward_level" min="0" max="3" value="0"></div>
+    <div style="flex:0 0 auto"><label>&nbsp;</label><button class="primary">{{ _('Anlegen') }}</button></div>
+    <div style="flex:1 1 100%"><p class="small muted" style="margin:2px 0 0">{{ _('Vollausschlag: die Abweichung, bei der eine Abtastung null Punkte gibt. Übergang: wie lange das Gerät zwischen zwei Durchläufen interpoliert. Die erste Spur wird passend zum Zweck gleich mit angelegt.') }}</p></div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+  // The two selection fields explain themselves: the help text sits directly below
+  // and changes with the selection — the axis is what gets misunderstood most often.
+  ['axis','purpose'].forEach(function(k){
+    var sel = document.getElementById('new_' + k), out = document.getElementById('new_' + k + '_help');
+    if(!sel || !out) return;
+    function upd(){ out.textContent = sel.options[sel.selectedIndex].dataset.help || ''; }
+    sel.addEventListener('change', upd); upd();
+  });
+})();
+</script>{% endblock %}

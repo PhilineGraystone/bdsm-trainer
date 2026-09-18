@@ -1,0 +1,129 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{# Condition of the slave AT THE COLLAR, with duration and last change.
+
+   Three places show this (live status, test page, slave page) — which is why
+   it sits in one single place. The same thing worded three ways goes stale in
+   three ways that differ (request by Philine 2026-09-11). #}
+
+{% macro dur(sec) -%}
+  {%- if sec is none -%}–
+  {%- elif sec >= 3600 -%}{{ sec // 3600 }}:{{ '%02d' % ((sec % 3600) // 60) }}:{{ '%02d' % (sec % 60) }}
+  {%- else -%}{{ sec // 60 }}:{{ '%02d' % (sec % 60) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# Just the word, without a badge — for "before that …". The key comes from the
+   device, the words live in this file: the firmware should carry no display texts. #}
+{% macro cond_word(c) -%}
+  {%- if c == 'ok' -%}{{ _('in Haltung') }}
+  {%- elif c == 'out' -%}{{ _('Haltung verlassen') }}
+  {%- elif c == 'outside' -%}{{ _('außerhalb des V-Cage') }}
+  {%- elif c == 'moving' -%}{{ _('bewegt sich') }}
+  {%- else -%}{{ _('nichts gemessen') }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro cond_pill(st) -%}
+  {%- set c = st.cond -%}
+  {%- if c == 'ok' -%}<span class="pill on">{{ _('in Haltung') }}</span>
+  {%- elif c == 'out' -%}<span class="pill warn">{{ _('Haltung verlassen') }}</span>
+  {%- elif c == 'outside' -%}<span class="pill warn">{{ _('außerhalb des V-Cage') }}</span>
+  {%- elif c == 'moving' -%}<span class="pill on">{{ _('bewegt sich') }}</span>
+  {%- else -%}<span class="pill">{{ _('nichts gemessen') }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{# THE DISTANCE TO THE EDGE OF THE V-CAGE (doc 42 point 3).
+   The collar sends its threshold along with the RSSI, so "-72 dBm" becomes
+   "3 dB inside". A bar, because a number in dBm means nothing to the
+   supervisor and even less to a visitor — the bar shortening is what one
+   sees before the pulse, and that is the whole reason to show it (decision
+   Philine 2026-09-16). Scale: +20 dB and better is a full bar, the threshold is
+   the mark, -10 dB and worse is empty. #}
+{% macro cage_bar(st) %}
+  {% if st.cage_margin_db is defined %}
+    {% set m = st.cage_margin_db %}
+    {% set pct = ((m + 10) * 100 / 30)|round|int %}{% set pct = 0 if pct < 0 else (100 if pct > 100 else pct) %}
+    {% set cls = 'out' if m < 0 else ('near' if m < 5 else 'in') %}
+    <span class="cagebar {{ cls }}" title="{{ _('Funkstärke {r} dBm, Grenze {t} dBm', r=st.rssi, t=st.rssi_thr) }}">
+      <span class="fill" style="width:{{ pct }}%"></span><span class="mark"></span></span>
+    {% if m < 0 %}<span class="cagetext out">{{ _('draußen') }} <b>{{ -m }} dB</b>
+      {% if st.cage_out_s is defined %}· {{ _('seit') }} <b>{{ dur(st.cage_out_s) }}</b>{% endif %}
+      {% if st.cage_gaveup %}· {{ _('V-Cage hat aufgegeben') }}
+      {% elif st.cage_next_s is defined %}· {% if not st.cage_warned %}{{ _('Warnung') }}{% else %}{{ _('Impuls') }}{% endif %} {{ _('in {n} s', n=st.cage_next_s) }}{% endif %}</span>
+    {% elif m < 5 %}<span class="cagetext near">{{ _('nahe der Grenze') }} <b>{{ m }} dB</b></span>
+    {% else %}<span class="cagetext in">{{ _('drinnen') }} <b>{{ m }} dB</b></span>{% endif %}
+  {% elif st.rssi is defined and st.mode == 'cage' %}
+    <span class="muted small">{{ st.rssi }} dBm</span>
+  {% endif %}
+{% endmacro %}
+
+{# One row for the device list: terse, but complete enough to search in. #}
+{% macro collar_line(st) %}
+  {% if st.cond is defined %}
+    {{ cond_pill(st) }}
+    <span class="muted">{{ _('seit') }} <b>{{ dur(st.cond_since_s) }}</b></span>
+    {% if st.cond_prev and st.cond_prev != 'none' %}<span class="muted small">·
+      {{ _('davor') }} {{ cond_word(st.cond_prev) }}{% endif %}
+    {% if st.cond_changes %}<span class="muted small">· {{ _('{n} Wechsel', n=st.cond_changes) }}</span>{% endif %}
+  {% endif %}
+  {% if st.pulse %}<br><span style="color:var(--warn)">{{ _('Impuls steht an') }}{% if st.pulse_in_s %}
+    {{ _('in {n} s', n=st.pulse_in_s) }}{% endif %}
+    <span class="small">({{ st.pulse_src }}{% if st.pulse_zap %} · {{ st.pulse_zap }}{% endif %}{% if st.pulse_warn %} · {{ _('mit Vorwarnung') }}{% endif %})</span></span>{% endif %}
+  {% if st.mode == 'cage' %}<br>{{ cage_bar(st) }}{% endif %}
+  {% if st.mode_since_s is defined %}<br><span class="muted small">{{ _('Modus läuft') }} {{ dur(st.mode_since_s) }}
+    {% if st.mode_punish or st.mode_warn or st.mode_violations %}·
+      {{ st.mode_punish }} {{ _('Impulse') }} · {{ st.mode_warn }} {{ _('Warnungen') }} · {{ st.mode_violations }} {{ _('Verstöße') }}{% endif %}
+    {% if st.mode_out_s %}· {{ _('draußen') }} {{ dur(st.mode_out_s) }}{% endif %}</span>{% endif %}
+{% endmacro %}
+
+{# A whole panel — for the test page and the slave page. #}
+{% macro collar_panel(st, title=None) %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ title or _('Was das Halsband gerade sieht') }}</h2>
+  <table><tbody>
+    <tr><td class="muted small">{{ _('Modus') }}</td><td><b>{{ st.mode or '–' }}</b>
+      {% if st.mode_since_s is defined %}<span class="muted small"> · {{ _('seit') }} {{ dur(st.mode_since_s) }}{% endif %}
+      {% if st.remaining_s %}<span class="muted small"> · {{ _('Rest') }} {{ dur(st.remaining_s) }}</span>{% endif %}</td></tr>
+    {% if st.cond is defined %}
+    <tr><td class="muted small">{{ _('Zustand') }}</td><td>{{ cond_pill(st) }}
+      <span class="muted">{{ _('seit') }} <b>{{ dur(st.cond_since_s) }}</b></span>
+      {% if st.cond_prev and st.cond_prev != 'none' %}<span class="small muted"> · {{ _('davor') }} {{ cond_word(st.cond_prev) }}{% endif %}
+      {% if st.cond_changes %}<span class="small muted"> · {{ _('{n} Wechsel in diesem Modus', n=st.cond_changes) }}</span>{% endif %}</td></tr>
+    {% endif %}
+    {% if st.angle is defined %}
+    <tr><td class="muted small">{{ _('Neigung') }}</td><td>{{ st.angle }}°
+      {% if st.tolerance is defined %}<span class="small muted"> · {{ _('erlaubt bis') }} {{ st.tolerance }}°</span>{% endif %}</td></tr>
+    {% endif %}
+    {% if st.rssi is defined %}
+    <tr><td class="muted small">{{ _('V-Cage') if st.mode == 'cage' else _('Funkstärke') }}</td><td>
+      {% if st.mode == 'cage' %}{{ cage_bar(st) }}{% else %}{{ st.rssi }} dBm{% endif %}</td></tr>
+    {% endif %}
+    {% if st.still_s is defined %}
+    <tr><td class="muted small">{{ _('reglos seit') }}</td><td>{{ dur(st.still_s) }}</td></tr>
+    {% endif %}
+    <tr><td class="muted small">{{ _('Impuls') }}</td><td>
+      {% if st.pulse %}<span class="pill warn">{{ _('steht an') }}</span>
+        {% if st.pulse_in_s %}<span class="muted">{{ _('in {n} s', n=st.pulse_in_s) }}</span>{% endif %}
+        <span class="small muted">{{ st.pulse_src }}{% if st.pulse_zap %} · {{ _('Stärke') }} {{ st.pulse_zap }}{% endif %}{% if st.pulse_warn %} · {{ _('mit Vorwarnung') }}{% endif %}</span>
+      {% else %}<span class="muted">{{ _('keiner') }}</span>{% endif %}</td></tr>
+    {% if st.mode_since_s is defined %}
+    <tr><td class="muted small">{{ _('in diesem Modus') }}</td><td>
+      <b>{{ st.mode_punish }}</b> {{ _('Impulse') }} ·
+      <b>{{ st.mode_warn }}</b> {{ _('Warnungen') }} ·
+      <b>{{ st.mode_violations }}</b> {{ _('Verstöße') }}
+      {% if st.mode_out_s %}<br><span class="muted small">{{ _('außerhalb der Haltung') }} {{ dur(st.mode_out_s) }}</span>{% endif %}</td></tr>
+    {% endif %}
+    <tr><td class="muted small">{{ _('Einstellungen') }}</td><td class="small muted">
+      {{ _('Impuls') }} {{ st.shock }} · {{ _('Vibration') }} {{ st.vibe }} · {{ _('Ton') }} {{ st.beep }} · {{ st.tx_ms }} ms
+      {% if st.shocks is defined %} · {{ _('{n} Impulse insgesamt', n=st.shocks) }}{% endif %}</td></tr>
+    {% if st.uptime_s is defined %}
+    <tr><td class="muted small">{{ _('Reserve') }}</td><td class="small muted">
+      {{ _('läuft seit') }} {{ dur(st.uptime_s) }}
+      {% if st.stack_free is defined %} · <span class="mono">{{ st.stack_free }} B {{ _('Stack') }}</span>
+        · <span class="mono">{{ (st.heap_free / 1024)|int }} kB {{ _('Heap') }}</span>
+        {% if st.stack_free < 1024 %}<span class="pill warn">{{ _('knapp') }}</span>{% endif %}{% endif %}</td></tr>
+    {% endif %}
+  </tbody></table>
+</div>
+{% endmacro %}

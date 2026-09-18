@@ -1,0 +1,7 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ _('Anmeldung · Punisher Aufsicht') }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head><body>
+<main><div class="panel login"><h1>{{ _('Punisher · Aufsicht') }}</h1>
+{% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
+<form method="post"><label>{{ _('Passwort') }}</label><input type="password" name="password" autofocus required>
+<p><button class="primary" style="width:100%">{{ _('Anmelden') }}</button></p></form></div></main></body></html>

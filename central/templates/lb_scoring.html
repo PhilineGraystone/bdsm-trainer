@@ -1,0 +1,13 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Punktesystem{% endblock %}
+{% block content %}
+<h1>{{ _('Punktesystem') }} <span class="muted small">{{ _('Zahlen und Schalter des Logbuchs (Tabelle scoring)') }}</span></h1>
+<form method="post" class="panel" style="max-width:900px"><input type="hidden" name="_csrf" value="{{ csrf }}">
+  <table><thead><tr><th>{{ _('Schlüssel') }}</th><th style="width:140px">{{ _('Wert') }}</th><th>{{ _('Bedeutung') }}</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td class="mono">{{ r.sc_key }}</td><td><input name="sc_{{ r.sc_key }}" value="{{ r.sc_value }}" maxlength="64"></td><td class="small">{{ r.sc_desc }}</td></tr>{% endfor %}
+  </tbody></table>
+  <p><button class="primary">{{ _('Speichern') }}</button></p>
+</form>
+<div class="panel" style="max-width:900px"><h2 style="margin-top:0">{{ _('Formel') }}</h2>
+<p class="small">{{ _('Punkte = Aufgabenstufe × base_per_level × Notenfaktor − malus_punish × Bestrafungen (nie unter 0) + bonus_best bei neuer persönlicher Bestleistung + Serienbonus (bonus_streak_step je Folgetag mit Training, höchstens bonus_streak_cap) + bonus_week beim vollständigen Wochenplan + bonus_challenge für den Sieger einer Herausforderung. Rangliste: je Aufgabe und Tag zählen die besten N Durchgänge — N steht seit 2.3 als Budget „Durchgänge“ (Seite Budgets). Nachsitzen ab detention_punish Bestrafungen in der Woche; Letzter der Wochenrangliste bekommt Nachsitzen, wenn detention_last = 1. Die Sicherheitsgrenzen des Bestrafungskanals (Mindestpause, Tageslimit) stehen in config.ini [safety] und sind hier bewusst nicht änderbar. Der Rang selbst gibt keine Punkte.') }}</p></div>
+{% endblock %}

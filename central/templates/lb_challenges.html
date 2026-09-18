@@ -1,0 +1,99 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Herausforderungen{% endblock %}
+{% block content %}
+<h1>{{ _('Herausforderungen') }} <span class="muted small">{{ _('eine Aufgabe, alle Sklaven, eine Bestenliste') }}</span></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Eine Herausforderung setzt') }} <b>{{ _('allen Sklaven des Feldes') }}</b> {{ _('dieselbe
+  Aufgabe mit demselben Ziel in den Wochenplan. Gewertet wird der beste gewertete Durchgang der Woche, in dem das Ziel
+  erreicht wurde. Reihenfolge:') }} <b>{{ _('Punkte') }}</b>{{ _(', dann die') }} <b>{{ _('Bestleistung der Disziplin') }}</b>{{ _(', dann die Note, dann weniger Bestrafungen, dann der frühere Durchgang.') }} <b>{{ _('Wer nicht angetreten ist, steht hinten') }}</b> {{ _('— Verweigerung ist eine Niederlage. Entschieden wird automatisch, sobald jeder im Feld ein Ergebnis hat, sonst spätestens bei der Wochenbewertung. Was Platz 1, Platz 2 und die hinteren Plätze bekommen, steht nicht hier, sondern unter') }}
+  <a href="{{ url_for('lb.rules_view') }}">{{ _('Belohnung und Bestrafung') }}</a>.</p>
+</div>
+
+<form method="get" class="row" style="align-items:flex-end;max-width:420px">
+  <div><label>{{ _('Woche') }}</label><select name="week" onchange="this.form.submit()">{% for w in weeks %}<option value="{{ w }}" {{ 'selected' if week==w }}>{{ w }}{{ ' (aktuell)' if w==cur_week }}</option>{% endfor %}</select></div>
+</form>
+
+{% for c in board %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ c.action_name }}
+    <span class="muted small">· {{ _('Ziel') }} {{ c.target_text }}{% if c.metric %} · {{ _('Bestleistung') }}: {{ c.metric }}{% endif %}{% if c.routine_name %} · {{ _('Wellenform') }}: {% if c.routine %}<a href="{{ url_for('lb.routine_edit', rid=c.routine) }}">{{ c.routine_name }}</a>{% else %}{{ c.routine_name }}{% endif %}{% endif %} · #{{ c.id }}</span>
+    <span class="pill {{ 'on' if c.status=='decided' else ('act' if c.status=='open' else 'off') }}">{{ _({'open':'offen','decided':'entschieden','void':'ungültig'}[c.status]) }}</span>
+    <span class="right">
+      {% if c.status == 'open' %}
+      <form class="inline" method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="ch_id" value="{{ c.id }}">
+        <button name="op" value="decide" class="sm">{{ _('Jetzt entscheiden') }}</button>
+        <button name="op" value="delete" class="sm danger" onclick="return confirm('Herausforderung löschen? Die Aufgaben verschwinden aus den Wochenplänen.')">✕</button></form>
+      {% else %}
+      <form class="inline" method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="ch_id" value="{{ c.id }}">
+        <button name="op" value="delete" class="sm danger" onclick="return confirm('Herausforderung löschen?')">✕</button></form>
+      {% endif %}
+    </span></h2>
+  <table><thead><tr><th>{{ _('Platz') }}</th><th>{{ _('Sklaven') }}</th><th>{{ _('Punkte') }}</th><th>{{ _('Note') }}</th><th>{{ _('Bestleistung') }}</th><th>{{ _('Strafen') }}</th><th></th></tr></thead><tbody>
+  {% for e in c.entries %}<tr {{ 'style=opacity:.55' if e.note }}>
+    <td><b>{{ e.place or '–' }}</b></td>
+    <td><a href="{{ url_for('slave_detail', sid=e.slave_id) }}#rang">{{ e.name }}</a></td>
+    <td>{{ e.points if e.points is not none else '–' }}</td>
+    <td class="gradecell">{% if e.grade %}{{ e.grade|grade_icon }}{% else %}–{% endif %}</td>
+    <td>{{ '%g'|format(e.best) if e.best is not none else '–' }}</td>
+    <td>{{ e.punish if e.punish is not none else '–' }}</td>
+    <td class="small muted">{% if e.note %}{{ e.note }}{% elif e.place == 1 and c.status == 'decided' %}{{ _('Sieger') }}{% endif %}</td>
+  </tr>{% else %}<tr><td colspan="7" class="muted">{{ _('Kein Sklavenfeld — die Herausforderung wird beim Entscheiden ungültig.') }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% if c.status == 'open' %}<p class="small muted" style="margin-bottom:0">{{ _('Noch offen: Platzierungen stehen erst
+  nach der Entscheidung fest.') }}</p>{% endif %}
+</div>
+{% else %}
+<div class="panel"><p class="muted">{{ _('In dieser Woche ist keine Herausforderung angesetzt.') }}</p></div>
+{% endfor %}
+
+<div class="panel"><h2 style="margin-top:0">{{ _('Ansetzen') }}</h2>
+<form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+  <div class="row" style="align-items:flex-end">
+    <div style="flex:1 1 240px"><label>{{ _('Aufgabe') }}</label><select name="action" id="ch_action">
+      {% for a in TRAINABLE %}<option value="{{ a.code }}" data-unit="{{ tasktypes.get(a.code).target_unit }}" data-def="{{ tasktypes.get(a.code).plan_default }}" data-routine="{{ 1 if tasktypes.get(a.code).level_select else 0 }}">{{ a.name }}</option>{% endfor %}
+    </select></div>
+    <div style="flex:0 0 120px"><label>{{ _('Ziel') }}</label><input type="number" name="target" id="ch_target" min="1" value="1800"></div>
+    <div style="flex:0 0 170px"><label>{{ _('Einheit') }}</label><select name="unit" id="ch_unit"><option value="s">{{ _('Sekunden / Anzahl') }}</option><option value="min">{{ _('Minuten') }}</option></select></div>
+    {% if routines_enabled %}<div style="flex:0 0 240px" id="ch_routine_box" hidden><label>{{ _('Wellenform (Pflicht)') }}</label>
+      <select name="routine" id="ch_routine"><option value="">– {{ _('bitte wählen') }} –</option>
+      {% for ro in routine_list() %}<option value="{{ ro.ro_id }}" data-min="{{ ro.ro_min_score }}">{{ _('Stufe') }} {{ ro.ro_level }} · {{ ro.ro_name }}</option>{% endfor %}
+      </select></div>{% endif %}
+    <div style="flex:0 0 200px"><label>{{ _('Woche') }}</label><select name="week"><option value="{{ cur_week }}">{{ cur_week }} ({{ _('aktuell') }})</option><option value="{{ next_week }}">{{ next_week }} ({{ _('nächste') }})</option></select></div>
+  </div>
+  <label style="margin-top:10px">{{ _('Sklavenfeld') }}</label>
+  <p class="small muted" style="margin:0 0 6px">{{ _('Nichts angekreuzt =') }} <b>{{ _('alle Sklaven') }}</b>{{ _('. Sklaven ohne passendes Gerät sind markiert — sie können nicht antreten und würden als Niederlage gewertet.') }}</p>
+  <div class="row">
+  {% for s in slaves %}
+    <label style="display:inline;flex:0 0 220px"><input type="checkbox" name="field" value="{{ s.slave_id }}"> {{ s.slave_name }}
+      <span class="cap-hint small muted" data-caps="{{ s.caps|join(',') }}"></span></label>
+  {% endfor %}
+  </div>
+  <p style="margin-top:14px"><button class="primary">{{ _('Herausforderung ansetzen') }}</button>
+    <label style="display:inline;margin-left:14px" class="small"><input type="checkbox" name="confirm_dup" value="1">
+      {{ _('auch wenn in dieser Woche schon eine offene Herausforderung in derselben Aufgabe läuft') }}</label></p>
+  <p class="small muted" style="margin:0">{{ _('Alle im Feld bekommen die Aufgabe als') }} <span class="mono">{{ _('challenge') }}</span> {{ _('in den Wochenplan der gewählten Woche.') }}</p>
+</form>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+  var a=document.getElementById('ch_action'),t=document.getElementById('ch_target'),u=document.getElementById('ch_unit');
+  var rb=document.getElementById('ch_routine_box'),rs=document.getElementById('ch_routine');
+  var caps={{ action_caps|tojson }};
+  function upd(){
+    var o=a.options[a.selectedIndex];
+    t.value=o.dataset.def; u.value='s'; u.disabled=o.dataset.unit!=='s';
+    // Challenge: the same waveform for everyone, otherwise they run side by side
+    if(rb){var need_ro=o.dataset.routine==='1'; rb.hidden=!need_ro; if(rs){rs.required=need_ro;}}
+    var need=caps[o.value]||'';
+    document.querySelectorAll('.cap-hint').forEach(function(h){
+      var have=(h.dataset.caps||'').split(',');
+      h.textContent=(need && have.indexOf(need)<0) ? '— kein Gerät' : '';
+    });
+  }
+  a.addEventListener('change',upd); upd();
+  if(rs){rs.addEventListener('change',function(){var o=rs.options[rs.selectedIndex];
+    if(o&&o.dataset.min){t.value=o.dataset.min;}});}
+})();
+</script>{% endblock %}

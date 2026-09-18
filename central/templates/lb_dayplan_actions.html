@@ -1,0 +1,182 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}{{ _('Aufgaben') }} — {{ plan.dp_name }}{% endblock %}
+{% block content %}
+<h1>{{ _('Welche Aufgaben dieser Tagesplan zulässt') }}
+  <span class="muted small">{{ plan.dp_name }}</span>
+  <a class="btn right" href="{{ url_for('lb.dayplans_view') }}">{{ _('zurück zu den Tagesplänen') }}</a></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Angekreuzt wird, was die Zentrale <b>nicht von selbst</b> wählen soll. Das betrifft das freie Training und den Mystery-Zug — die beiden Stellen, an denen die Zentrale selbst greift. Der Wochenplan bleibt unberührt, dort hat ein Mensch zugeordnet, und die Aufsicht kann jede Aufgabe weiterhin von Hand starten.') | safe }}</p>
+  <p class="small muted">{{ _('Alles auf dieser Seite kann den Tag nur <b>kleiner</b> machen; Decke, Auflagen und <span class="mono">config.ini [safety]</span> stehen unverändert darüber. Eine Aufgabe ohne Kreuz ist erlaubt — und weil beim Speichern über jede Aufgabe entschieden wird, erscheint eine, die später neu in den Katalog kommt, als <span class="pill act">neu</span>.') | safe }}</p>
+  <p class="small muted">{{ _('Beim Zeitfenster zählt der <b>ganze Durchgang</b>: eine Aufgabe, die um 21:55 anfinge und 40 Minuten dauert, endete um 22:35 — sie kommt dann nicht dran. „von“ später als „bis“ heißt über Mitternacht.') | safe }}</p>
+</div>
+
+<form method="post" class="panel">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <div class="alist">
+  {% for r in rows %}
+    <div class="arow{{ ' on' if r.mode != 'allow' }}" data-code="{{ r.code }}">
+      <div class="ahead">
+        <label class="atick"><input type="checkbox" name="blocked_{{ r.code }}" value="1"
+               {{ 'checked' if r.mode != 'allow' }}> <b>{{ r.name }}</b></label>
+        <span class="small muted mono">{{ r.code }}</span>
+        {% if r.capability %}<span class="cap" title="{{ r.capability }}">{{ r.capability }}</span>{% endif %}
+        {% if r.fresh %}<span class="pill act" title="{{ _('Diese Aufgabe kam in den Katalog, nachdem hier zuletzt entschieden wurde.') }}">{{ _('neu') }}</span>{% endif %}
+        <span class="asum small">{{ r.summary or '' }}</span>
+        <button type="button" class="sm afold" hidden>▾</button>
+      </div>
+      <div class="aopts" hidden>
+        <p class="small muted" style="margin:2px 0 6px">{{ r.desc }}</p>
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:0 0 230px"><label>{{ _('Wie gesperrt') }}</label>
+            <select name="mode_{{ r.code }}" class="amode">
+              {% for m in BLOCK_MODES %}<option value="{{ m }}" {{ 'selected' if r.mode == m }}
+                 data-help="{{ MODES[m][1] }}">{{ MODES[m][0] }}</option>{% endfor %}
+            </select></div>
+          <div style="flex:0 0 110px" class="awin"><label>{{ _('von') }}</label>
+            <input name="from_{{ r.code }}" class="afrom" value="{{ r.from_hhmm }}" maxlength="5" placeholder="22:00"></div>
+          <div style="flex:0 0 110px" class="awin"><label>{{ _('bis') }}</label>
+            <input name="to_{{ r.code }}" class="ato" value="{{ r.to_hhmm }}" maxlength="5" placeholder="06:00"></div>
+        </div>
+        <p class="small muted ahelp" style="margin:6px 0 0"></p>
+        <div class="awin tbarwrap">
+          <div class="tbar" title="{{ _('Ziehen setzt das Fenster; die Uhrzeiten daneben bleiben änderbar.') }}"></div>
+          <div class="tscale small muted">
+            {% for hlab in ['0','3','6','9','12','15','18','21','24'] %}<span>{{ hlab }}</span>{% endfor %}
+          </div>
+        </div>
+      </div>
+      {% if r.caps or (r.routine_param and routines) %}
+      <div class="anarrow">
+        <p class="small muted" style="margin:0 0 4px">{{ _('Einengen (gilt auch, wenn die Aufgabe erlaubt ist): leer = keine Grenze. Eine Grenze kann nur weniger bewirken, nie mehr.') }}</p>
+        <div class="row">
+        {% for c in r.caps %}
+          <div style="flex:0 0 150px"><label>{{ c.label }} ≤{% if c.unit %} <span class="muted small">{{ c.unit }}</span>{% endif %}</label>
+            <input type="number" name="cap_{{ r.code }}_{{ c.name }}" value="{{ c.value }}"
+                   {% if c.min is not none %}min="{{ c.min }}"{% endif %}
+                   {% if c.max is not none %}max="{{ c.max }}"{% endif %}
+                   placeholder="{{ c.max }}"></div>
+        {% endfor %}
+        </div>
+        {% if r.routine_param and routines %}
+        <label>{{ _('Diese Wellenformen hier nicht') }}</label>
+        <div class="poolgrid">
+          {% for ro in routines %}<label class="atick small"><input type="checkbox" name="noro_{{ r.code }}"
+             value="{{ ro.ro_id }}" {{ 'checked' if ro.ro_id in r.no_routines }}> {{ ro.ro_name }}</label>{% endfor %}
+        </div>
+        <p class="small muted" style="margin:2px 0 0">{{ _('Ausgeschlossen, nicht festgelegt: eine festgelegte Wellenform könnte eine sein, die die Auswahl nach Stufe nie getroffen hätte — das wäre keine Einengung. Bleibt keine übrig, kommt die Aufgabe hier nicht dran.') }}</p>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+  </div>
+  <p style="margin-top:14px"><button class="primary">{{ _('Entscheidungen speichern') }}</button>
+    <span class="small muted">{{ _('Gespeichert wird über alle Aufgaben — auch über die ohne Kreuz.') }}</span></p>
+</form>
+{% endblock %}
+{% block scripts %}<script>
+// Der Browser schlaegt nur Minutenwerte vor, gerechnet und gespeichert wird in
+// der Zentrale — dasselbe Muster wie beim Bildeditor (Doc 56). Hier steht
+// deshalb nichts als Anzeige und Eingabe; keine Regel, keine Grenze.
+(function () {
+  var STEP = {{ STEP }}, DAY = 1440, WIN = {{ WINDOW_MODES|tojson }};
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function hhmm(m) { m = ((m % DAY) + DAY) % DAY; return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
+  function mins(t) {
+    var p = String(t || '').split(':'), h = parseInt(p[0], 10), m = parseInt(p[1] || '0', 10);
+    if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return Math.round((h * 60 + m) / STEP) * STEP % DAY;
+  }
+  document.querySelectorAll('.arow').forEach(function (row) {
+    var tick = row.querySelector('.atick input'), opts = row.querySelector('.aopts'),
+        fold = row.querySelector('.afold'), sum = row.querySelector('.asum'),
+        mode = row.querySelector('.amode'), help = row.querySelector('.ahelp'),
+        from = row.querySelector('.afrom'), to = row.querySelector('.ato'),
+        bar = row.querySelector('.tbar');
+
+    function isWin() { return WIN.indexOf(mode.value) >= 0; }
+
+    function paint() {
+      bar.innerHTML = '';
+      if (!isWin()) return;
+      var a = mins(from.value), b = mins(to.value);
+      if (a === null || b === null || a === b) return;
+      var parts = a < b ? [[a, b]] : [[a, DAY], [0, b]];
+      parts.forEach(function (p) {
+        var d = document.createElement('div');
+        d.className = 'tsel';
+        d.style.left = (p[0] / DAY * 100) + '%';
+        d.style.width = ((p[1] - p[0]) / DAY * 100) + '%';
+        bar.appendChild(d);
+      });
+    }
+
+    // Was der Server beim Aufbauen hingeschrieben hat — es nennt auch die
+    // Einengungen, die der Browser nicht nachrechnet (Doc 60 §4).
+    var served = sum.textContent.trim();
+    var narrow = row.querySelector('.anarrow');
+
+    function label() {
+      if (!tick.checked) return served;
+      var o = mode.options[mode.selectedIndex], t = o.textContent;
+      var a = mins(from.value), b = mins(to.value);
+      if (isWin() && a !== null && b !== null) {
+        t += ' ' + hhmm(a) + '–' + hhmm(b) + (a > b ? ' (über Mitternacht)' : '');
+      }
+      // Was eingeengt ist, stand schon in der Zeile vom Server — den Teil
+      // hinter dem ersten Mittelpunkt behalten.
+      var rest = served.indexOf(' · ');
+      return t + (rest >= 0 ? served.slice(rest) : '');
+    }
+
+    function upd(openIt) {
+      row.classList.toggle('on', tick.checked);
+      // Aufklappen geht IMMER, wenn es etwas einzustellen gibt: eine Aufgabe
+      // kann erlaubt und trotzdem eingeengt sein (Doc 60 §4).
+      fold.hidden = !(tick.checked || narrow);
+      if (fold.hidden) { opts.hidden = true; }
+      else if (openIt) { opts.hidden = false; }
+      // Die Sperrfelder nur beim Kreuz; das Einengen bleibt stehen.
+      mode.parentNode.hidden = !tick.checked;
+      help.hidden = !tick.checked;
+      row.querySelectorAll('.awin').forEach(function (d) { d.hidden = !(tick.checked && isWin()); });
+      help.textContent = mode.options[mode.selectedIndex].dataset.help || '';
+      sum.textContent = opts.hidden ? label() : '';
+      fold.textContent = opts.hidden ? '▸' : '▾';
+      paint();
+    }
+
+    // Frisch angekreuzt wird aufgeklappt — man muss ja etwas einstellen.
+    // Was schon eingestellt ist, bleibt zu; die Zeile daneben sagt was.
+    tick.addEventListener('change', function () { upd(tick.checked); });
+    mode.addEventListener('change', function () { upd(true); });
+    from.addEventListener('change', function () { from.value = hhmm(mins(from.value) || 0); upd(true); });
+    to.addEventListener('change', function () { to.value = hhmm(mins(to.value) || 0); upd(true); });
+    fold.addEventListener('click', function () { opts.hidden = !opts.hidden; upd(!opts.hidden); });
+
+    var drag = null;
+    function at(ev) {
+      var r = bar.getBoundingClientRect();
+      var m = Math.round((ev.clientX - r.left) / r.width * DAY / STEP) * STEP;
+      return Math.max(0, Math.min(DAY, m));
+    }
+    bar.addEventListener('mousedown', function (ev) {
+      if (!isWin()) return;
+      drag = at(ev); ev.preventDefault();
+    });
+    window.addEventListener('mousemove', function (ev) {
+      if (drag === null) return;
+      var b = at(ev);
+      from.value = hhmm(drag); to.value = hhmm(b === drag ? drag + STEP : b);
+      paint(); sum.textContent = '';
+    });
+    window.addEventListener('mouseup', function () {
+      if (drag === null) return;
+      drag = null; upd(true);
+    });
+
+    upd(false);
+  });
+})();
+</script>{% endblock %}

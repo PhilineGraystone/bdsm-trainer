@@ -1,0 +1,23 @@
+# Punisher — Partitionstabelle ESP32-S3 N16R8 (16 MB Flash, 8 MB OPI-PSRAM)
+#
+# WICHTIG: Die Arduino-ESP32-Plattform flasht fest
+#   bootloader @ 0x0000, partitions @ 0x8000, boot_app0 (otadata) @ 0xe000, app @ 0x10000
+# -> otadata MUSS bei 0xe000 liegen und der erste App-Slot bei 0x10000,
+#    sonst landet das Image neben der Tabelle ("invalid magic byte").
+#
+# Zwei OTA-Slots a 6 MB, SPIFFS als Reserve, Coredump fuer Absturzanalyse.
+# PSRAM ist kein Flash -> Board-Menue (PSRAM: "OPI PSRAM").
+#
+# Arduino IDE : Datei im Sketch-Ordner -> wird automatisch benutzt.
+#               Werkzeuge: Flash Size = 16MB, PSRAM = OPI PSRAM.
+#               Einmalig "Erase All Flash Before Sketch Upload: Enabled",
+#               damit Reste alter Layouts weg sind.
+# PlatformIO  : board_build.partitions = partitions.csv ; board_upload.flash_size = 16MB
+#
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+app0,       app,  ota_0,    0x10000,  0x600000,
+app1,       app,  ota_1,    0x610000, 0x600000,
+spiffs,     data, spiffs,   0xC10000, 0x3E0000,
+coredump,   data, coredump, 0xFF0000, 0x10000,

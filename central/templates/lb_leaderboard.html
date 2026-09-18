@@ -1,0 +1,51 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Rangliste{% endblock %}
+{% block content %}
+<h1>{{ _('Rangliste') }}</h1>
+<form method="get" class="row" style="align-items:flex-end;max-width:420px">
+  <div><label>{{ _('Woche') }}</label><select name="week" onchange="this.form.submit()">{% for w in weeks %}<option value="{{ w }}" {{ 'selected' if week==w }}>{{ w }}{{ ' (aktuell)' if w==cur_week }}</option>{% endfor %}</select></div>
+</form>
+<div class="grid">
+  <div class="panel"><h2 style="margin-top:0">{{ _('Woche') }} {{ week }} <span class="muted small">{{ _('— Score, setzt montags zurück') }}</span></h2>
+    <table><thead><tr><th>{{ _('Platz') }}</th><th>{{ _('Sklaven') }}</th><th>{{ _('Rang') }}</th><th>{{ _('Punkte') }}</th><th>{{ _('Strafen') }}</th><th>{{ _('Durchgänge') }}</th></tr></thead><tbody>
+    {% for e in board.week %}<tr><td><b>{{ e.place }}</b></td><td><a href="{{ url_for('slave_detail', sid=e.slave_id) }}#rang">{{ e.name }}</a></td><td><span class="rankbadge">{{ e.rank }} · {{ e.rank_name }}</span></td><td><b>{{ e.points }}</b></td><td>{{ e.punish }}</td><td>{{ e.runs }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">{{ _('Noch keine gewerteten Durchgänge in dieser Woche.') }}</td></tr>{% endfor %}</tbody></table></div>
+  <div class="panel"><h2 style="margin-top:0">{{ _('Gesamt') }} <span class="muted small">{{ _('— alle Wochen') }}</span></h2>
+    <table><thead><tr><th>{{ _('Platz') }}</th><th>{{ _('Sklaven') }}</th><th>{{ _('Rang') }}</th><th>{{ _('Punkte') }}</th><th>{{ _('Strafen') }}</th><th>{{ _('Durchgänge') }}</th></tr></thead><tbody>
+    {% for e in board.total %}<tr><td><b>{{ e.place }}</b></td><td><a href="{{ url_for('slave_detail', sid=e.slave_id) }}#rang">{{ e.name }}</a></td><td><span class="rankbadge">{{ e.rank }} · {{ e.rank_name }}</span></td><td><b>{{ e.points }}</b></td><td>{{ e.punish }}</td><td>{{ e.runs }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">{{ _('Noch keine gewerteten Durchgänge.') }}</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% if board.challenges %}
+<h2>{{ _('Herausforderungen') }} {{ week }} <span class="muted small">{{ _('— zweite Rangliste: dieselbe Aufgabe für alle') }}</span></h2>
+<div class="grid">
+{% for c in board.challenges %}
+  <div class="panel"><h2 style="margin-top:0">{{ c.action_name }}
+    <span class="muted small">· {{ _('Ziel') }} {{ c.target_text }}</span>
+    <span class="pill {{ 'on' if c.status=='decided' else ('act' if c.status=='open' else 'off') }}">{{ _({'open':'offen','decided':'entschieden','void':'ungültig'}[c.status]) }}</span></h2>
+    <table><thead><tr><th>{{ _('Platz') }}</th><th>{{ _('Sklaven') }}</th><th>{{ _('Punkte') }}</th><th>{{ _('Note') }}</th><th>{{ _('Bestleistung') }}</th><th>{{ _('Strafen') }}</th></tr></thead><tbody>
+    {% for e in c.entries %}<tr {{ 'style=opacity:.55' if e.note }}>
+      <td><b>{{ e.place or '–' }}</b></td>
+      <td><a href="{{ url_for('slave_detail', sid=e.slave_id) }}#rang">{{ e.name }}</a></td>
+      <td>{{ e.points if e.points is not none else '–' }}</td>
+      <td class="gradecell">{% if e.grade %}{{ e.grade|grade_icon }}{% else %}–{% endif %}</td>
+      <td>{{ '%g'|format(e.best) if e.best is not none else '–' }}</td>
+      <td>{{ e.punish if e.punish is not none else '–' }}{% if e.note %} <span class="small muted">{{ e.note }}</span>{% endif %}</td>
+    </tr>{% else %}<tr><td colspan="6" class="muted">{{ _('Kein Sklavenfeld.') }}</td></tr>{% endfor %}</tbody></table>
+    <p class="small muted" style="margin-bottom:0"><a href="{{ url_for('lb.challenges_view', week=week) }}">{{ _('Herausforderungen verwalten') }}</a></p>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+<div class="panel"><h2 style="margin-top:0">{{ _('Wochenbewertung') }} {{ week }}</h2>
+  {% if reviews %}<table><thead><tr><th>{{ _('Sklaven') }}</th><th>{{ _('Rang') }}</th><th>{{ _('Begründung') }}</th><th>Score</th><th>{{ _('Platz') }}</th><th>{{ _('Plan') }}</th><th>{{ _('Strafen') }}</th><th>{{ _('Noten') }}</th><th>{{ _('Auflagen') }}</th><th></th></tr></thead><tbody>
+  {% for r in reviews %}<tr><td>{{ r.slave_name }}</td>
+    <td>{{ r.wr_rank_before }} → <b>{{ r.wr_rank_after }}</b> {% if r.wr_rank_after > r.wr_rank_before %}<span class="pill on">{{ _('Aufstieg') }}</span>{% elif r.wr_rank_after < r.wr_rank_before %}<span class="pill off">{{ _('Abstieg') }}</span>{% endif %}</td>
+    <td class="small">{{ r.wr_reason }}</td><td>{{ r.wr_score }}</td><td>{{ r.wr_place or '–' }}</td><td>{{ r.wr_plan_done }}/{{ r.wr_plan_total }}</td><td>{{ r.wr_punish }}</td>
+    <td class="gradecell">{% for g in (r.wr_grades or '').split(',') if g %}{{ g|grade_icon }}{% endfor %}</td>
+    {# Display, no scoring: the sanctions do not feed into wr_score. #}
+    <td class="small">{% if r.wr_sanctions %}{{ r.wr_sanctions }}{% if r.wr_sanctions_open %} <span class="muted">({{ r.wr_sanctions_open }} {{ _('noch offen') }})</span>{% endif %}{% else %}–{% endif %}</td>
+    <td><a class="btn sm" href="{{ url_for('lb.zeugnis', sid=r.wr_slave, week=week) }}">{{ _('Zeugnis') }}</a></td></tr>{% endfor %}</tbody></table>
+  {% else %}<p class="muted">{{ _('Für diese Woche liegt noch keine Bewertung vor — sie läuft automatisch am Montag.') }} <a href="{{ url_for('lb.weekly_view') }}">{{ _('Jetzt anstoßen (Wochenplan)') }}</a>.</p>{% endif %}
+</div>
+<p class="small muted">{{ _('Gleichstand: weniger Bestrafungen, dann frühere Zeit. Aufsichts-Einträge geben keine Ranglistenpunkte; Rahmen (V-Cage, Schloss, Timer, Zufall) zählen nicht.') }}</p>
+{% endblock %}

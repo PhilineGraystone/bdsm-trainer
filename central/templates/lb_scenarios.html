@@ -1,0 +1,84 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Szenarien{% endblock %}
+{% block content %}
+<h1>{{ _('Szenarien') }} <span class="muted small">{{ _('das Bündel mit Namen') }}</span></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Ein Szenario ist kein neues Regelsystem. Es bündelt, was es schon gibt — Tagesplan (mit Mystery-Blöcken), Auflagen, Budgets, Tagesform — unter einem Namen, für eine Teilnehmerin, mit einem Klick und einem Enddatum. Aktivieren schreibt in genau die Tabellen, in denen die Teile leben; das Enddatum nimmt alles wieder heraus: Plan zurück, Auflagen aufgehoben, Budgets weg, Tagesform normal.') }}
+  {{ _('Aktiviert wird auf der Teilnehmerseite (Karte „Rang, Auflagen, Kanal“).') }}</p>
+</div>
+
+{% if active %}<div class="panel"><h2 style="margin-top:0">{{ _('Läuft gerade') }}</h2>
+<table><thead><tr><th>{{ _('Teilnehmerin') }}</th><th>{{ _('Szenario') }}</th><th>{{ _('Von') }}</th><th>{{ _('Bis') }}</th><th>{{ _('von') }}</th></tr></thead><tbody>
+{% for a in active %}<tr><td><a href="{{ url_for('slave_detail', sid=a.sx_slave) }}#rang">{{ a.slave_name }}</a></td><td><b>{{ a.sn_name }}</b></td><td class="mono">{{ a.sx_from.strftime('%d.%m.') }}</td><td class="mono">{{ a.sx_until.strftime('%d.%m.%Y') }}</td><td class="small muted mono">{{ a.sx_by }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+
+<div class="panel">
+<table><thead><tr><th>{{ _('Name') }}</th><th>{{ _('Tagesplan') }}</th><th>{{ _('Tagesform') }}</th><th>{{ _('Auflagen') }}</th><th>{{ _('Budgets') }}</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr>
+  <td><b>{{ r.sn_name }}</b>{% if r.active_n %} <span class="pill act">{{ _('läuft bei {n}', n=r.active_n) }}</span>{% endif %}{% if r.sn_note %}<br><span class="small muted">{{ r.sn_note }}</span>{% endif %}</td>
+  <td class="small">{{ r.plan_name or _('ihr eigener') }}</td>
+  <td class="small">{{ DAYFORMS[r.sn_dayform] if r.sn_dayform else '–' }}</td>
+  <td class="small">{% for k in r.sanctions %}<span class="pill warn">{{ SANCTIONS[k][0] if k in SANCTIONS else k }}</span> {% else %}–{% endfor %}</td>
+  <td class="small mono">{{ r.budget_lines | replace('\n', '<br>') | safe if r.budget_lines else '–' }}</td>
+  <td class="actions"><a class="btn sm" href="{{ url_for('lb.scenarios_view', edit=r.sn_id) }}#edit">{{ _('bearbeiten') }}</a>
+    <form class="inline" method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="sn_id" value="{{ r.sn_id }}">
+    <button name="op" value="delete" class="sm danger" onclick="return confirm('{{ _('Szenario löschen? Wo es läuft, wird es beendet.') }}')">✕</button></form></td>
+</tr>{% else %}<tr><td colspan="6" class="muted">{{ _('Keine Szenarien — unten eines anlegen.') }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+
+<div class="panel" id="edit" style="max-width:760px"><h2 style="margin-top:0">{{ _('Szenario bearbeiten') if edit else _('Szenario anlegen') }}</h2>
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="{{ 'edit' if edit else 'add' }}">{% if edit %}<input type="hidden" name="sn_id" value="{{ edit.sn_id }}">{% endif %}
+    <label>{{ _('Name') }}</label><input name="name" maxlength="80" required value="{{ edit.sn_name if edit else '' }}" placeholder="{{ _('z. B. Strict, Weekend, Einführung') }}">
+    <label>{{ _('Notiz') }}</label><input name="note" maxlength="255" value="{{ edit.sn_note or '' if edit else '' }}">
+    <div class="row">
+      <div><label>{{ _('Tagesplan') }}</label><select name="day_plan"><option value="">{{ _('ihren eigenen lassen') }}</option>{% for p in plans %}<option value="{{ p.dp_id }}" {{ 'selected' if edit and edit.sn_day_plan == p.dp_id }}>{{ p.dp_name }}</option>{% endfor %}</select></div>
+      <div><label>{{ _('Tagesform') }}</label><select name="dayform"><option value="">{{ _('nicht anfassen') }}</option>{% for k in ('easy','normal','strict') %}<option value="{{ k }}" {{ 'selected' if edit and edit.sn_dayform == k }}>{{ DAYFORMS[k] }}</option>{% endfor %}</select></div>
+    </div>
+    <label>{{ _('Auflagen') }}</label>
+    <p style="margin:2px 0 6px">{% for k, v in SANCTIONS.items() %}<label style="display:inline-block;margin-right:14px"><input type="checkbox" name="sanctions" value="{{ k }}" {{ 'checked' if edit and k in edit.sanctions }}> {{ v[0] }}</label>{% endfor %}</p>
+    <label>{{ _('Budgets') }}</label>
+    <p class="small muted" style="margin:2px 0 6px">{{ _('Ein Budget begrenzt, wie <b>oft</b> etwas passiert und wie <b>dicht</b> zwei Male aufeinander folgen dürfen. Leer lassen, was nicht begrenzt werden soll — aber eines von beiden muss stehen, sonst ist die Zeile keine Grenze.') | safe }}</p>
+    <table class="btab"><thead><tr>
+      <th>{{ _('Was') }}</th><th>{{ _('Zeitraum') }}</th><th>{{ _('Anzahl') }}</th>
+      <th>{{ _('Abstand (s)') }}</th><th>{{ _('zu dicht?') }}</th></tr></thead><tbody>
+    {% for b in brows %}<tr>
+      <td><select class="bkey" name="b_key_{{ loop.index0 }}"><option value="">{{ _('— keins —') }}</option>
+        {% for k, label, hlp in bkeys %}<option value="{{ k }}" {{ 'selected' if b.key == k }}
+           title="{{ hlp }}">{{ label }}</option>{% endfor %}</select></td>
+      <td><select name="b_period_{{ loop.index0 }}">
+        {% for p in PERIODS %}<option value="{{ p }}" {{ 'selected' if b.period == p }}>{{ _('je Tag') if p == 'day' else _('je Woche') }}</option>{% endfor %}</select></td>
+      <td><input type="number" name="b_count_{{ loop.index0 }}" min="0" max="9999" style="width:90px"
+                 value="{{ b.max_count if b.max_count else '' }}" placeholder="{{ _('frei') }}"></td>
+      <td><input type="number" name="b_gap_{{ loop.index0 }}" min="0" max="86400" style="width:100px"
+                 value="{{ b.min_gap_s if b.min_gap_s else '' }}" placeholder="{{ _('frei') }}"></td>
+      <td><select class="bongap" name="b_ongap_{{ loop.index0 }}">
+        {% for g in ON_GAP %}<option value="{{ g }}" {{ 'selected' if b.on_gap == g }}>{{ _('nachholen') if g == 'queue' else _('verfällt') }}</option>{% endfor %}</select></td>
+    </tr>{% endfor %}
+    </tbody></table>
+    <p class="small muted" style="margin:6px 0 0">{{ _('<b>Anzahl</b> — wie oft im Zeitraum. <b>Abstand</b> — wie viele Sekunden mindestens dazwischen liegen müssen. <b>zu dicht?</b> — was mit dem geschieht, was innerhalb des Abstands anfällt: <i>nachholen</i> schiebt es hinter die Pause, <i>verfällt</i> lässt es weg. Für Belohnungen ist <i>verfällt</i> die Vorgabe — eine Belohnung zwanzig Minuten nach dem Anlass ist keine.') | safe }}</p>
+    <p style="margin-top:14px"><button class="primary">{{ _('Speichern') }}</button>{% if edit %} <a class="btn" href="{{ url_for('lb.scenarios_view') }}">{{ _('Abbrechen') }}</a>{% endif %}</p>
+    <p class="small muted">{{ _('Was leer bleibt, wird beim Aktivieren nicht angefasst. Die Decke aus config.ini [safety] gilt unter jedem Szenario; ein Budget kann nur verschärfen.') }}</p>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+// Die Legende sagt: bei Belohnungen ist „verfällt" die Vorgabe. Eine neue
+// Zeile stand aber auf „nachholen", weil das der erste Eintrag der Liste ist —
+// die Seite haette also etwas anderes gespeichert, als sie darunter erklaert.
+// Das hier setzt die Vorgabe beim Wählen des Schlüssels, und nur solange
+// niemand das Feld selbst angefasst hat. Gespeichert wird immer das, was zu
+// sehen ist; ohne Javascript bleibt es bei der Wahl des Browsers.
+(function () {
+  document.querySelectorAll('.btab tbody tr').forEach(function (row) {
+    var key = row.querySelector('.bkey'), gap = row.querySelector('.bongap');
+    if (!key || !gap) return;
+    gap.addEventListener('change', function () { gap.dataset.touched = '1'; });
+    key.addEventListener('change', function () {
+      if (gap.dataset.touched) return;
+      gap.value = key.value === 'reward' ? 'drop' : 'queue';
+    });
+  });
+})();
+</script>{% endblock %}

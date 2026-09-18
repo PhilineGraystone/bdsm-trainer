@@ -1,0 +1,21 @@
+# Punisher — Partitionstabelle ESP32 (klassisch, z. B. WROVER-B) mit 4 MB Flash
+#
+# Arduino-ESP32 flasht fest: bootloader @0x1000 (ESP32 klassisch), partitions @0x8000,
+# boot_app0 (otadata) @0xe000, app @0x10000 -> diese Offsets sind Pflicht.
+#
+# Layout nach dem Muster "min_spiffs": zwei grosse OTA-Slots (je 1,875 MB), weil die
+# PunisherDevice-Basis mit WiFi/MQTT/OTA/WebServer/JSON + U8g2 + IMU-Bibliothek
+# deutlich ueber 1 MB liegt und die 1,25-MB-Slots des Standardschemas zu knapp waeren.
+# SPIFFS klein (Reserve), Coredump fuer Absturzanalyse.
+#
+# Arduino IDE : Datei im Sketch-Ordner; Werkzeuge: Flash Size = 4MB, PSRAM = Enabled (WROVER).
+#               Einmalig "Erase All Flash Before Sketch Upload: Enabled" beim Layoutwechsel.
+# PlatformIO  : board_build.partitions = partitions.csv ; board_upload.flash_size = 4MB
+#
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+app0,       app,  ota_0,    0x10000,  0x1E0000,
+app1,       app,  ota_1,    0x1F0000, 0x1E0000,
+spiffs,     data, spiffs,   0x3D0000, 0x20000,
+coredump,   data, coredump, 0x3F0000, 0x10000,

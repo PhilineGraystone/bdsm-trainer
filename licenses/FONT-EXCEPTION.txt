@@ -1,0 +1,22 @@
+GNU FreeFont — Font Exception
+=============================
+
+The GNU FreeFont files in central/fonts/ are licensed under the GNU General
+Public License, version 3 or later (see GPL-3.0.txt), WITH the following
+exception, as published by the GNU FreeFont project:
+
+    As a special exception, if you create a document which uses this font,
+    and embed this font or unaltered portions of this font into the
+    document, this font does not by itself cause the resulting document to
+    be covered by the GNU General Public License. This exception does not
+    however invalidate any other reasons why the document might be covered
+    by the GNU General Public License. If you modify this font, you may
+    extend this exception to your version of the font, but you are not
+    obligated to do so. If you do not wish to do so, delete this exception
+    statement from your version.
+
+In plain terms: rendering text with these fonts, or embedding them in a
+document produced by this project, does not place that document under the GPL.
+Modifying the fonts themselves does fall under the GPL.
+
+Upstream: https://www.gnu.org/software/freefont/

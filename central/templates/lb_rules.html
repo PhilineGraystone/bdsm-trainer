@@ -1,0 +1,170 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Belohnung und Bestrafung{% endblock %}
+{% block content %}
+<h1>{{ _('Belohnung und Bestrafung') }} <span class="muted small">{{ _('Regeln: Anlass → Bedingung → Wirkung') }}</span></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Hier steht, was bei welchem Anlass passiert — nichts davon ist fest
+  im Programm verdrahtet. Jede Regel prüft eine Bedingung und führt eine Wirkung aus; treffen mehrere Regeln zu,
+  laufen sie alle in der Reihenfolge ihrer Ordnungszahl.') }} <b>{{ _('Die Hüllkurven der Geräte und die Grenzen aus') }}
+  <span class="mono">config.ini [safety]</span> {{ _('stehen über jeder Regel') }}</b> {{ _('— eine Regel wählt eine Stärkestufe, sie kann keine Grenze anheben. Bestrafungen und Belohnungen brauchen einen anwesenden Sklaven; ist er nicht angemeldet, warten sie bis zu seinem nächsten Tagesbeginn.') }}</p>
+</div>
+
+<div class="panel">
+<table><thead><tr><th>#</th><th>{{ _('Anlass') }}</th><th>{{ _('Bedingung') }}</th><th>{{ _('Wirkung') }}</th><th>{{ _('Wert') }}</th><th>{{ _('Notiz') }}</th><th></th></tr></thead><tbody>
+{% for r in rules %}<tr {{ 'style=opacity:.45' if not r.ru_enabled }}>
+  <td class="small muted">{{ r.ru_pos }}</td>
+  <td><b>{{ TRIGGERS.get(r.ru_trigger, r.ru_trigger) }}</b><br><span class="small muted mono">{{ r.ru_trigger }}</span></td>
+  <td class="small">{{ r.cond_text }}
+    {% if r.dead %}<br><span class="pill off" title="{{ _('Die Bedingung gehört zu einem anderen Anlass. Diese Regel steht in der Liste, sieht eingerichtet aus und kann nie zutreffen — bitte Bedingung oder Anlass ändern.') }}">{{ _('trifft nie zu') }}</span>{% endif %}</td>
+  <td><b>{{ EFFECTS.get(r.ru_effect, (r.ru_effect, ''))[0] }}</b></td>
+  <td class="mono small">{{ r.ru_param or '–' }}</td>
+  <td class="small muted">{{ r.ru_note or '' }}{% if r.ru_by %} <span class="mono">({{ r.ru_by }})</span>{% endif %}</td>
+  <td class="actions">
+    <a class="btn sm" href="{{ url_for('lb.rules_view', **{'from': r.ru_id}) }}#neu"
+       title="{{ _('Diese Regel als Vorlage in das Formular übernehmen und dort anpassen.') }}">{{ _('duplizieren') }}</a>
+    <form class="inline" method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="ru_id" value="{{ r.ru_id }}">
+    <button name="op" value="toggle" class="sm">{{ 'aus' if r.ru_enabled else 'an' }}</button>
+    <button name="op" value="delete" class="sm danger" onclick="return confirm('Regel löschen?')">✕</button></form></td>
+</tr>{% else %}<tr><td colspan="7" class="muted">{{ _('Keine Regeln — dann passiert außer der Bewertung nichts.') }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+
+<div class="grid">
+<div class="panel" id="neu"><h2 style="margin-top:0">{{ _('Regel hinzufügen') }}{% if pre %} <span class="pill act">{{ _('aus einer vorhandenen übernommen') }}</span>{% endif %}</h2>
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+    <label>{{ _('Anlass') }}</label>
+    <select name="trigger" id="ru_trigger">{% for k, v in TRIGGERS.items() %}<option value="{{ k }}" {{ 'selected' if pre.get('trigger') == k }}
+        data-help="{{ TRIGGER_HELP.get(k, '') }}">{{ v }}</option>{% endfor %}</select>
+    <p class="small muted" style="margin:4px 0 0" id="ru_trigger_help"></p>
+    <label>{{ _('Bedingung') }}</label>
+    <select name="cond" id="ru_cond">{% for k, v in CONDITIONS.items() %}<option value="{{ k }}" {{ 'selected' if pre.get('cond') == k }}
+        data-help="{{ COND_HELP.get(k, '') }}">{{ v }}</option>{% endfor %}</select>
+    <p class="small muted" style="margin:4px 0 0" id="ru_cond_help"></p>
+    <p class="small muted" style="margin:4px 0 0">{{ _('Es stehen nur die Bedingungen zur Wahl, die zu diesem Anlass überhaupt passen — eine Platzierung gibt es nur, wo etwas platziert wurde.') }}</p>
+    <label>{{ _('Zeit') }}</label>
+    <select name="cond_time">{% for k, v in TIME_CONDITIONS.items() %}<option value="{{ k }}" {{ 'selected' if pre.get('cond_time') == k }}>{{ v }}</option>{% endfor %}</select>
+    <p class="small muted" style="margin:4px 0 0">{{ _('Beides muss zutreffen. Die Uhr ist die der Zentrale, im Moment des Anlasses.') }}</p>
+    <label>{{ _('Wirkung') }}</label>
+    <select name="effect" id="ru_effect">{% for k, v in EFFECTS.items() %}<option value="{{ k }}" {{ 'selected' if pre.get('effect') == k }} data-help="{{ v[1] }}">{{ v[0] }}</option>{% endfor %}</select>
+    <p class="small muted" style="margin:4px 0 0" id="ru_help"></p>
+    {# Instead of one free-text field whose syntax changes with the effect: per
+       effect the fields it really needs. The value is put together in the
+       central unit, not in the browser (doc 58 section 5). #}
+    <div class="pfields" data-eff="punish reward">
+      <label>{{ _('Stärkestufe') }}</label>
+      <select name="p_level">{% for n in ['1','2','3'] %}<option value="{{ n }}" {{ 'selected' if pre.get('p_level') == n }}>{{ n }}</option>{% endfor %}</select>
+    </div>
+    <div class="pfields" data-eff="privilege_grant privilege_revoke">
+      <label>{{ _('Privileg') }}</label>
+      <select name="p_priv">{% for k, v in PRIVILEGES.items() %}<option value="{{ k }}" {{ 'selected' if pre.get('p_priv') == k }}>{{ v[0] }} ({{ k }})</option>{% endfor %}</select>
+    </div>
+    <div class="pfields" data-eff="privilege_grant">
+      <label>{{ _('Wochen (0 = ohne Ende)') }}</label>
+      <input type="number" name="p_weeks" min="0" max="52" value="{{ pre.get('p_weeks', '0') }}">
+    </div>
+    <div class="pfields" data-eff="sanction_impose sanction_lift">
+      <label>{{ _('Auflage') }}</label>
+      <select name="p_sanc">{% for k, v in SANCTIONS.items() %}<option value="{{ k }}" {{ 'selected' if pre.get('p_sanc') == k }}>{{ v[0] }} ({{ k }})</option>{% endfor %}</select>
+    </div>
+    <div class="pfields" data-eff="sanction_impose">
+      <label>{{ _('Wie lange') }}</label>
+      <select name="p_dur" id="ru_dur">
+        <option value="" {{ 'selected' if not pre.get('p_dur') }}>{{ _('bis jemand sie aufhebt') }}</option>
+        <option value="d" {{ 'selected' if pre.get('p_dur') == 'd' }}>{{ _('bis zum Ende des Tages') }}</option>
+        <option value="h" {{ 'selected' if pre.get('p_dur') == 'h' }}>{{ _('für so viele Stunden') }}</option>
+      </select>
+      <div id="ru_hours" hidden><label>{{ _('Stunden') }}</label>
+        <input type="number" name="p_hours" min="1" max="720" value="{{ pre.get('p_hours', '2') }}"></div>
+      <label>{{ _('… und zusätzlich bis so viele Durchgänge bestanden sind (0 = keine)') }}</label>
+      <input type="number" name="p_runs" min="0" max="99" value="{{ pre.get('p_runs', '0') }}">
+    </div>
+    <div class="pfields" data-eff="detention">
+      <label>{{ _('Aufgabe') }}</label>
+      <select name="p_action"><option value="">{{ _('die Aufgabe des Anlasses') }}</option>
+        {% for a in TRAINABLE %}<option value="{{ a.code }}" {{ 'selected' if pre.get('p_action') == a.code }}>{{ a.name }}</option>{% endfor %}</select>
+    </div>
+    <div class="pfields" data-eff="day_minutes">
+      <label>{{ _('Tagesdauer') }}</label>
+      <select name="p_dm_mode"><option value="rel" {{ 'selected' if pre.get('p_dm_mode', 'rel') == 'rel' }}>{{ _('um so viele Minuten ändern') }}</option>
+        <option value="abs" {{ 'selected' if pre.get('p_dm_mode') == 'abs' }}>{{ _('auf so viele Minuten setzen') }}</option></select>
+      <input type="number" name="p_dm" min="-480" max="480" value="{{ pre.get('p_dm', '30') }}">
+    </div>
+    <div class="pfields" data-eff="points">
+      <label>{{ _('Punkte (negativ = Abzug)') }}</label>
+      <input type="number" name="p_points" min="-9999" max="9999" value="{{ pre.get('p_points', '10') }}">
+    </div>
+    <div class="pfields" data-eff="badge">
+      <label>{{ _('Abzeichen') }}</label>
+      <select name="p_badge">{% for k, v in BADGES.items() %}<option value="{{ k }}" {{ 'selected' if pre.get('p_badge') == k }}>{{ v[0] }} ({{ k }})</option>{% endfor %}</select>
+    </div>
+    <div class="pfields" data-eff="dayform">
+      <label>{{ _('Tagesform') }}</label>
+      <select name="p_form">{% for k, v in DAYFORMS.items() %}<option value="{{ k }}" {{ 'selected' if pre.get('p_form') == k }}>{{ v }}</option>{% endfor %}</select>
+      <label style="display:inline"><input type="checkbox" name="p_tomorrow" value="1" {{ 'checked' if pre.get('p_tomorrow') }}> {{ _('erst morgen, nicht heute') }}</label>
+    </div>
+    <label>{{ _('Notiz') }}</label><input name="note" maxlength="255" value="{{ pre.get('note', '') }}" placeholder="{{ _('wofür diese Regel gedacht ist') }}">
+    <label>{{ _('Ordnungszahl') }}</label><input type="number" name="pos" min="0" max="999" value="{{ pre.get('pos', 50) }}">
+    <p style="margin-top:14px"><button class="primary">{{ _('Regel anlegen') }}</button></p>
+  </form>
+</div>
+<div class="panel"><h2 style="margin-top:0">{{ _('Was die Wirkungen tun') }}</h2>
+  <table><tbody>
+  {% for k, v in EFFECTS.items() %}<tr><td><b>{{ v[0] }}</b><br><span class="small muted mono">{{ k }}</span></td>
+    <td class="small">{{ v[1] }}</td></tr>{% endfor %}
+  </tbody></table>
+  <h3 style="font-size:14px;margin:14px 0 6px">{{ _('Privilegien') }}</h3>
+  <table><tbody>{% for k, v in PRIVILEGES.items() %}<tr><td class="mono small">{{ k }}</td><td class="small"><b>{{ v[0] }}</b> — {{ v[1] }}</td></tr>{% endfor %}</tbody></table>
+  <h3 style="font-size:14px;margin:14px 0 6px">{{ _('Auflagen') }}</h3>
+  <table><tbody>{% for k, v in SANCTIONS.items() %}<tr><td class="mono small">{{ k }}</td><td class="small"><b>{{ v[0] }}</b> — {{ v[1] }}</td></tr>{% endfor %}</tbody></table>
+  <p class="small muted">{{ _('Dauer anhängen: <code>:2</code> = zwei Stunden, <code>:d</code> = bis zum Ende des Tages, <code>:r3</code> = bis drei Durchgänge bestanden sind. Ohne Angabe läuft die Auflage, bis jemand sie aufhebt.') | safe }}</p>
+  <h3 style="font-size:14px;margin:14px 0 6px">{{ _('Abzeichen') }}</h3>
+  <p class="small">{% for k, v in BADGES.items() %}<span class="badge mono" title="{{ v[1] }}">{{ k }}</span> {% endfor %}</p>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+  // Je Wirkung nur die Felder zeigen, die sie braucht — dasselbe Muster wie im
+  // Tagesplan-Formular. Was ausgeblendet ist, wird auch abgeschaltet, sonst
+  // schickt das Formular Werte einer Wirkung mit, die gar nicht gewaehlt ist.
+  var e = document.getElementById('ru_effect'), h = document.getElementById('ru_help');
+  var dur = document.getElementById('ru_dur'), hours = document.getElementById('ru_hours');
+  function upd(){
+    h.textContent = e.options[e.selectedIndex].dataset.help || '';
+    document.querySelectorAll('.pfields').forEach(function(d){
+      var on = d.dataset.eff.split(' ').indexOf(e.value) >= 0;
+      d.hidden = !on;
+      d.querySelectorAll('input,select').forEach(function(i){ i.disabled = !on; });
+    });
+    if (hours) { hours.hidden = dur.value !== 'h'; hours.querySelector('input').disabled = hours.hidden; }
+  }
+  e.addEventListener('change', upd);
+  if (dur) dur.addEventListener('change', upd);
+  upd();
+
+  // Nur die Bedingungen zeigen, die zum gewaehlten Anlass passen (Doc 58 §8).
+  // Bis 2.4 stand hier das volle Kreuzprodukt, und eine unmoegliche Paarung
+  // liess sich anlegen: die Regel sah eingerichtet aus und tat nie etwas.
+  // Der Riegel steht auch im Server; das hier erspart ihn nur dem Menschen.
+  var FIT = {{ COND_FIT|tojson }};
+  var t = document.getElementById('ru_trigger'), c = document.getElementById('ru_cond'),
+      th = document.getElementById('ru_trigger_help'), ch = document.getElementById('ru_cond_help');
+  function help(sel, box){ box.textContent = sel.options[sel.selectedIndex].dataset.help || ''; }
+  function conds(){
+    var ok = FIT[t.value] || [], keep = c.value, first = null;
+    Array.prototype.forEach.call(c.options, function(o){
+      o.hidden = o.disabled = ok.indexOf(o.value) < 0;
+      if (!o.hidden && first === null) first = o.value;
+    });
+    // Stand eine unpassende Bedingung im Feld, faellt sie auf die erste
+    // passende zurueck — sonst schickte das Formular etwas ab, das der Server
+    // gleich wieder ablehnt.
+    if (ok.indexOf(keep) < 0) c.value = first === null ? '' : first;
+    help(c, ch);
+  }
+  t.addEventListener('change', function(){ help(t, th); conds(); });
+  c.addEventListener('change', function(){ help(c, ch); });
+  help(t, th); conds();
+})();
+</script>{% endblock %}

@@ -1,0 +1,39 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Zeugnis {{ slave.slave_name }} {{ week }}{% endblock %}
+{% block content %}
+<p class="noprint"><a href="{{ url_for('lb.leaderboard_view', week=week) }}">{{ _('← Rangliste') }}</a> · <a href="{{ url_for('slave_detail', sid=slave.slave_id) }}#rang">{{ _('Sklaven') }}</a> · <a class="btn sm" href="{{ url_for('lb.zeugnis', sid=slave.slave_id, week=week, pdf=1) }}">PDF</a> <button class="sm" onclick="window.print()">{{ _('Drucken') }}</button></p>
+<div class="zeugnis">
+  {% if rev %}{% if rev.wr_rank_after > rev.wr_rank_before %}<div class="stamp">{{ _('AUFSTIEG') }}</div>{% elif rev.wr_rank_after < rev.wr_rank_before %}<div class="stamp">{{ _('ABSTIEG') }}</div>{% endif %}{% endif %}
+  <h1>{{ _('ZEUGNIS') }}</h1>
+  <div style="color:#555">{{ _('Woche') }} {{ week }} · {{ monday.strftime('%d.%m.') }} – {{ sunday.strftime('%d.%m.%Y') }}</div>
+  <h2 style="font-size:24px;margin:18px 0 6px">{{ slave.slave_name }}</h2>
+  {% if rev %}
+  <table style="max-width:520px;margin-bottom:18px"><tbody>
+    <tr><th>{{ _('Rang') }}</th><td>{{ rank_names.get(rev.wr_rank_before, rev.wr_rank_before) }} → <b>{{ rank_names.get(rev.wr_rank_after, rev.wr_rank_after) }}</b> <span style="color:#555">({{ _(rev.wr_reason) if rev.wr_reason == 'pausiert' else rev.wr_reason }})</span></td></tr>
+    {% if rev.wr_paused_days %}<tr><th>{{ _('Pause') }}</th><td>{{ _('{n} von 7 Tagen pausiert', n=rev.wr_paused_days) }}{% if rev.wr_paused_days >= 7 %} — {{ _('die Woche steht: nichts bewertet, der Rang bleibt') }}{% endif %}</td></tr>{% endif %}
+    <tr><th>{{ _('Wochenpunkte') }}</th><td><b>{{ rev.wr_score }}</b>{% if rev.wr_place %} · {{ _('Platz') }} {{ rev.wr_place }}{% endif %}</td></tr>
+    <tr><th>{{ _('Durchgänge') }}</th><td>{{ rev.wr_runs }} · {{ _('bestandene Aufgaben') }} {{ rev.wr_tasks_passed }} · {{ _('Wochenbester') }} {{ rev.wr_best_count }}×</td></tr>
+    <tr><th>{{ _('Wochenplan') }}</th><td>{{ rev.wr_plan_done }} {{ _('von') }} {{ rev.wr_plan_total }}{% if rev.wr_plan_complete %} — {{ _('vollständig') }}{% endif %}</td></tr>
+    <tr><th>{{ _('Bestrafungen') }}</th><td>{{ rev.wr_punish }}</td></tr>
+    <tr><th>{{ _('Noten') }}</th><td class="gradecell">{% for g in (rev.wr_grades or '').split(',') if g %}{{ g|grade_icon }}{{ g }} {% endfor %}</td></tr>
+    {# Sanctions: they appear in this place because they belong to the week —
+       they do not feed into the weekly points (see sql/001_baseline.sql). #}
+    <tr><th>{{ _('Auflagen') }}</th><td>{% if rev.wr_sanctions %}{% for k in rev.wr_sanctions.split(', ') %}<span class="pill">{{ SANCTIONS.get(k.split('×')[0], [k])[0] }}{% if '×' in k %} ×{{ k.split('×')[1] }}{% endif %}</span> {% endfor %}
+      {% if rev.wr_sanctions_open %}<span class="small muted">{{ rev.wr_sanctions_open }} {{ _('noch offen') }}</span>{% endif %}
+      <br><span class="small muted">{{ _('ohne Einfluss auf die Wochenpunkte') }}</span>{% else %}–{% endif %}</td></tr>
+  </tbody></table>
+  {% else %}<p style="color:#900">{{ _('Für diese Woche liegt noch keine Bewertung vor (sie läuft am Montag).') }}</p>{% endif %}
+  <h2 style="font-size:16px">{{ _('Durchgänge') }}</h2>
+  <table><thead><tr><th>{{ _('Zeit') }}</th><th>{{ _('Aufgabe') }}</th><th>{{ _('Stufe') }}</th><th>{{ _('Ziel') }}</th><th>{{ _('Strafen') }}</th><th>{{ _('Note') }}</th><th>{{ _('Punkte') }}</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td>{{ r.ach_started|ts }}</td><td>{{ r.ach_action|action_name }}</td><td>{{ r.ach_level }}</td><td>{{ r.ach_target|target_text(r.ach_target_unit) }}</td><td>{{ r.ach_punish }}</td>
+    <td class="gradecell">{% if r.ach_grade and r.ach_grade != '-' %}{{ r.ach_grade|grade_icon }}{{ r.ach_grade }}{% else %}–{% endif %}</td><td>{{ r.ach_points }}{% if r.ach_best %} ★{% endif %}</td></tr>
+  {% else %}<tr><td colspan="7" style="color:#777">{{ _('keine') }}</td></tr>{% endfor %}</tbody></table>
+  <h2 style="font-size:16px">{{ _('Wochenplan') }}</h2>
+  <table><tbody>{% for t in tasks %}<tr><td style="width:24px">{{ '☑' if t.wt_status=='done' else '☐' }}</td><td>{{ t.wt_action|action_name }} {{ t.wt_target|target_text(t.unit) }}</td><td style="color:#555">{{ {'plan':'Plan','detention':'Nachsitzen','challenge':'Herausforderung'}[t.wt_kind] }} · {{ t.wt_status }}</td></tr>{% else %}<tr><td style="color:#777">{{ _('kein Plan') }}</td></tr>{% endfor %}</tbody></table>
+  {% if rev and rev.wr_remark %}<h2 style="font-size:16px">{{ _('Bemerkung der Aufsicht') }}</h2><p style="font-style:italic">{{ rev.wr_remark }}</p>{% endif %}
+  <p style="color:#777;font-size:12px;margin-top:24px">{{ _('Punisher · Devious City · automatisch aus dem Logbuch erzeugt') }}</p>
+</div>
+{% if rev %}<form method="post" action="{{ url_for('lb.slave_remark', sid=slave.slave_id) }}" class="panel noprint" style="max-width:820px"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="week" value="{{ week }}">
+  <label>{{ _('Bemerkung der Aufsicht (erscheint im Zeugnis)') }}</label><textarea name="remark" rows="3" maxlength="500">{{ rev.wr_remark or '' }}</textarea>
+  <p><button class="primary">{{ _('Speichern') }}</button></p></form>{% endif %}
+{% endblock %}

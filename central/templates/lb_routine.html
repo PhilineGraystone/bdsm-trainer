@@ -1,0 +1,504 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}{{ r.ro_name }}{% endblock %}
+{% block content %}
+<h1>{{ r.ro_name }}{% if r.ro_example %} <span class="pill act">{{ _('Beispiel') }}</span>{% endif %}
+  <a class="btn right" href="{{ url_for('lb.routines_view') }}">{{ _('Alle Wellenformen') }}</a></h1>
+
+<div class="panel">
+  <p style="margin:0"><b>{{ summary }}</b></p>
+  {% if r.ro_note %}<p class="small muted" style="margin:6px 0 0">{{ r.ro_note }}</p>{% endif %}
+  <p class="small muted" style="margin:6px 0 0">{{ _('Prüfsumme') }}: <span class="mono">{{ '%08X'|format(crc) }}</span>
+    · {{ n_points }} {{ _('Stützpunkte') }}{% if used %} · {{ _('verwendet in {n} Aufgaben/Herausforderungen', n=used) }}{% endif %}</p>
+</div>
+
+{% if warnings %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Hinweise') }}</h2>
+  <ul class="small" style="margin:0">
+  {% for w in warnings %}<li>{{ _('Spur') }} {{ w.track }} · <b>{{ (w.at_ms / 1000.0)|round(1) }} s</b> — {{ w.text }}</li>{% endfor %}
+  </ul>
+  <p class="small muted" style="margin-bottom:0">{{ _('Hinweise blockieren nichts — die Aufsicht zeichnet die Kurve und sieht, wo es unangenehm wird. Die harte Grenze steht in der Firmware und lässt sich über MQTT nicht anheben.') }}</p>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Kurve') }}</h2>
+  <div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
+    <div style="flex:0 0 auto"><label style="display:inline">{{ _('Spur bearbeiten') }}</label>
+      <select id="tracksel">
+        {% for t in tracks %}<option value="{{ t.rt_track }}">{{ t.rt_track }} · {{ t.role_label }}{% if t.channel_label %} ({{ t.channel_label }}){% endif %}</option>{% endfor %}
+      </select></div>
+    <div style="flex:0 0 auto"><button class="sm" id="btn_play">▶ {{ _('Abspielen') }}</button></div>
+    <div style="flex:0 0 auto"><select id="speed" class="sm">
+      <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option>
+      <option value="0.5">0,5×</option></select></div>
+    <div style="flex:0 0 auto"><button class="sm primary" id="btn_save">{{ _('Kurve speichern') }}</button></div>
+    <div style="flex:1 1 auto"><span class="small muted" id="hint"></span></div>
+  </div>
+
+  <canvas id="cv" height="320" style="width:100%;background:#0e1116;border-radius:6px;display:block;cursor:crosshair"></canvas>
+
+  <div class="row" style="margin-top:8px;gap:16px">
+    <div style="flex:0 0 auto"><span class="small muted">{{ _('Sollwert') }}</span>
+      <div id="bar_soll" class="estbar"><i></i></div></div>
+    <div style="flex:0 0 auto"><span class="small muted">{{ _('Ausgabe') }}</span>
+      <div id="bar_out" class="estbar out"><i></i></div></div>
+    <div style="flex:1 1 240px"><span class="small muted" id="playinfo">&nbsp;</span></div>
+  </div>
+
+  <p class="small muted" style="margin-bottom:0">{% if tracks|selectattr('rt_role', 'equalto', 'zieltiefe')|list %}{{ _('Klicken setzt einen Stützpunkt, Ziehen verschiebt ihn, Rechtsklick löscht ihn. Oben ist die Ruhelage, unten die größte Tiefe — tiefer ist hier wirklich weiter unten. Geändert wird immer nur die oben gewählte Spur; die anderen liegen blass dahinter, damit man sieht, wie sie zusammenspielen.') }}{% else %}{{ _('Klicken setzt einen Stützpunkt, Ziehen verschiebt ihn, Rechtsklick löscht ihn. Unten ist nichts, oben volle Stärke — mehr ist hier weiter oben. Geändert wird immer nur die oben gewählte Spur; die anderen liegen blass dahinter, damit man sieht, wie sie zusammenspielen.') }}{% endif %}
+  <b>{{ _('Änderungen auf der Fläche sind erst nach „Kurve speichern" in der Datenbank.') }}</b></p>
+</div>
+
+<div class="panel" id="spur">
+  <h2 style="margin-top:0">{{ _('Spuren') }}</h2>
+  <p class="small muted" style="margin-top:0">{{ _('Eine Spur ist eine Kurve mit einer Rolle. Die Rolle entscheidet den Charakter — welches Profil die Bridge spielt —, nicht die Höhe. Belohnung und Bestrafung müssen sich fühlbar unterscheiden, deshalb sind die Profile fest je Rolle vergeben.') }}</p>
+
+  {% for t in tracks %}
+  <form method="post" action="{{ url_for('lb.routine_tracks', rid=r.ro_id) }}" class="row trackform"
+        style="align-items:flex-end;border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="track" value="{{ t.rt_track }}">
+    <div style="flex:0 0 44px"><label>{{ _('Spur') }}</label><div class="stepnum" style="padding-top:8px">{{ t.rt_track }}</div></div>
+    <div style="flex:0 0 170px"><label>{{ _('Rolle') }}</label>
+      <select name="role" class="t_role">
+        {% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if t.rt_role == k }}>{{ v[0] }}</option>{% endfor %}
+      </select></div>
+    <div style="flex:0 0 160px" class="t_profwrap"><label>{{ _('Profil') }}</label>
+      <select name="profile" class="t_profile">
+        {% for pr in PROFILES %}<option value="{{ pr.key }}" data-role="{{ pr.role }}" data-desc="{{ pr.desc }}"
+          {{ 'selected' if t.rt_profile == pr.key }}>{{ pr.name }} · {{ pr.hz }}</option>{% endfor %}
+      </select></div>
+    <div style="flex:0 0 140px" class="t_chanwrap"><label>{{ _('Kanal') }}</label>
+      <select name="channel" class="t_channel">
+        {% for k, v in CHANNELS.items() %}<option value="{{ k }}" {{ 'selected' if t.rt_channel == k }}>{{ v[0] }}</option>{% endfor %}
+      </select></div>
+    <div style="flex:0 0 140px" class="t_modewrap"><label>{{ _('Modus') }}</label>
+      <select name="mode" class="t_mode">
+        {% for k, v in MODES.items() %}<option value="{{ k }}" {{ 'selected' if t.rt_mode == k }}>{{ v[0] }}</option>{% endfor %}
+      </select></div>
+    <div style="flex:0 0 150px" class="t_couplewrap"><label>{{ _('Kopplung an') }}</label>
+      <select name="couple" class="t_couple">
+        {% for k, v in COUPLES.items() %}<option value="{{ k }}" {{ 'selected' if t.rt_couple == k }}>{{ v[0] }}</option>{% endfor %}
+      </select></div>
+    <div style="flex:1 1 220px"><label>{{ _('Notiz') }}</label><input name="note" maxlength="255" value="{{ t.rt_note or '' }}"></div>
+    <div style="flex:0 0 auto"><button class="sm" name="op" value="save">{{ _('Übernehmen') }}</button></div>
+    <div style="flex:0 0 auto"><button class="sm danger" name="op" value="delete"
+        onclick="return confirm('{{ _('Spur mitsamt Kurve löschen?') }}')">✕</button></div>
+    <div style="flex:1 1 100%"><p class="small muted t_help" style="margin:2px 0 0"></p></div>
+  </form>
+  {% endfor %}
+
+  <form method="post" action="{{ url_for('lb.routine_tracks', rid=r.ro_id) }}" class="row"
+        style="align-items:flex-end;border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+    <div style="flex:0 0 170px"><label>{{ _('Neue Spur') }}</label>
+      <select name="role">{% for k, v in ROLES.items() %}{% if k != 'zieltiefe' %}<option value="{{ k }}">{{ v[0] }}</option>{% endif %}{% endfor %}</select></div>
+    <div style="flex:0 0 140px"><label>{{ _('Kanal') }}</label>
+      <select name="channel">{% for k, v in CHANNELS.items() %}<option value="{{ k }}">{{ v[0] }}</option>{% endfor %}</select></div>
+    <div style="flex:0 0 auto"><button>{{ _('Spur hinzufügen') }}</button></div>
+    <div style="flex:1 1 100%"><p class="small muted" style="margin:2px 0 0">{{ _('Je Kanal klingt immer nur eine Spur: kommen zwei gleichzeitig, gilt Bestrafung vor Stimulation vor Belohnung. Zwei Rollen gleichzeitig gehören deshalb auf die zwei Kanäle — das sind zwei Elektrodenpaare und fühlt sich getrennt an.') }}</p></div>
+  </form>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Zeichnen mit Werten') }}</h2>
+  <p class="small muted" style="margin-top:0">{{ _('Für alle, die lieber Zahlen eingeben als zu ziehen: eine Kiste ist ein Halt (Anfahrt, dann halten), eine Rampe ein einzelner Stützpunkt. Beides hängt hinten an die gewählte Spur an und wird sofort gespeichert.') }}</p>
+  <form method="post" action="{{ url_for('lb.routine_points', rid=r.ro_id) }}" class="row" style="align-items:flex-end">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="track" id="pt_track" value="0">
+    <div style="flex:0 0 130px"><label id="lab_value">{{ _('Wert (%)') }}</label><input type="number" name="depth" min="0" max="100" value="60"></div>
+    <div style="flex:0 0 120px" id="wrap_tol"><label>{{ _('Toleranz (%)') }}</label><input type="number" name="tol" min="0" max="50" value="{{ r.ro_tol_default }}"></div>
+    <div style="flex:0 0 130px"><label id="lab_ramp">{{ _('Anfahrt (s)') }}</label><input type="number" name="ramp_s" min="0" max="3600" value="1"></div>
+    <div style="flex:0 0 130px"><label id="lab_hold">{{ _('Halten (s)') }}</label><input type="number" name="hold_s" min="0" max="3600" value="3"></div>
+    <div style="flex:0 0 auto"><button class="primary" name="op" value="box">{{ _('Kiste anhängen') }}</button></div>
+    <div style="flex:0 0 auto"><button name="op" value="ramp">{{ _('Rampe anhängen') }}</button></div>
+    <div style="flex:0 0 auto"><button name="op" value="clear" class="danger"
+        onclick="return confirm('{{ _('Alle Stützpunkte dieser Spur löschen?') }}')">{{ _('Spur leeren') }}</button></div>
+    <div style="flex:1 1 100%"><p class="small muted" style="margin:2px 0 0" id="valuehelp"></p></div>
+  </form>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Eigenschaften') }}</h2>
+  <form method="post" action="{{ url_for('lb.routine_head', rid=r.ro_id) }}" class="row" style="align-items:flex-start">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div style="flex:1 1 220px"><label>{{ _('Name') }}</label><input name="name" maxlength="120" value="{{ r.ro_name }}"></div>
+    <div style="flex:2 1 280px"><label>{{ _('Notiz') }}</label><input name="note" maxlength="255" value="{{ r.ro_note or '' }}"></div>
+
+    <div style="flex:1 1 100%"></div>
+    <div style="flex:1 1 320px"><label>{{ _('X-Achse') }}</label>
+      <select name="axis" id="ed_axis">
+        {% for k, v in AXES.items() %}<option value="{{ k }}" data-help="{{ v[2] }}" {{ 'selected' if axis == k }}>{{ v[0] }}</option>{% endfor %}</select>
+      <p class="small muted" id="ed_axis_help" style="margin:4px 0 0"></p></div>
+    <div style="flex:1 1 320px"><label>{{ _('Zweck') }}</label>
+      <select name="purpose" id="ed_purpose">
+        {% for k, v in PURPOSES.items() %}<option value="{{ k }}" data-help="{{ v[1] }}" {{ 'selected' if r.ro_purpose == k }}>{{ v[0] }}</option>{% endfor %}</select>
+      <p class="small muted" id="ed_purpose_help" style="margin:4px 0 0"></p></div>
+    <div style="flex:1 1 100%"><p class="small muted" style="margin:2px 0 8px">{{ _('Der Zweck steht am Kopf und sagt, WO die Wellenform auftaucht. Die Rolle steht an der Spur und sagt, WAS sie am Ausgang tut. Die beiden werden gern verwechselt — deshalb stehen sie hier beieinander.') }}</p></div>
+
+    <div style="flex:0 0 90px"><label>{{ _('Stufe') }}</label>
+      <input type="number" name="level" min="1" max="{{ level_max }}" value="{{ r.ro_level }}"></div>
+    <div style="flex:0 0 110px"><label>{{ _('Toleranz (%)') }}</label>
+      <input type="number" name="tol_default" min="1" max="50" value="{{ r.ro_tol_default }}"></div>
+    <div style="flex:0 0 130px"><label>{{ _('Vollausschlag (%)') }}</label>
+      <input type="number" name="fullscale_pct" min="5" max="100" value="{{ r.ro_fullscale_pct }}"></div>
+    <div style="flex:0 0 130px"><label>{{ _('Übergang (ms)') }}</label>
+      <input type="number" name="loop_ms" min="0" max="30000" step="100" value="{{ r.ro_loop_ms }}"></div>
+    <div style="flex:0 0 130px"><label>{{ _('Mindestnote') }}</label>
+      <input type="number" name="min_score" min="0" max="10000" step="100" value="{{ r.ro_min_score }}"></div>
+    <div style="flex:0 0 110px"><label>{{ _('Strafe') }}</label>
+      <input type="number" name="punish_level" min="0" max="3" value="{{ r.ro_punish_level }}"></div>
+    <div style="flex:0 0 110px"><label>{{ _('Belohnung') }}</label>
+      <input type="number" name="reward_level" min="0" max="3" value="{{ r.ro_reward_level }}"></div>
+    <div style="flex:0 0 auto"><label>&nbsp;</label><button class="primary" name="op" value="save">{{ _('Speichern') }}</button></div>
+    <div style="flex:0 0 auto"><label>&nbsp;</label><button name="op" value="copy">{{ _('Kopieren') }}</button></div>
+    <div style="flex:0 0 auto"><label>&nbsp;</label><button name="op" value="delete" class="danger"
+        onclick="return confirm('{{ _('Wellenform wirklich löschen?') }}')">{{ _('Löschen') }}</button></div>
+  </form>
+</div>
+
+<form method="post" action="{{ url_for('lb.routine_points', rid=r.ro_id) }}" id="saveform" style="display:none">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <input type="hidden" name="op" value="replace">
+  <input type="hidden" name="track" id="save_track">
+  <input type="hidden" name="points" id="save_points">
+</form>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.estbar{width:160px;height:16px;background:#12151a;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.estbar > i{display:block;height:100%;width:0;background:#5bd18a;transition:width .08s linear}
+.estbar.out > i{background:#e0a33a}
+</style>
+<script>
+window.addEventListener('error', function(e){
+  var h = document.getElementById('hint');
+  if (h) h.textContent = '\u26a0 ' + (e.message || 'Skriptfehler');
+});
+(function(){
+// ---------------------------------------------------------------------------
+// Waveform editor. Everything drawn here is the same model as in
+// libs/routines.py: support points with linear interpolation in between.
+var AXIS   = {{ axis|tojson }};
+var TRACKS = {{ tracks|map(attribute='rt_track')|list|tojson }};
+var ROLES  = {{ tracks|map(attribute='rt_role')|list|tojson }};
+var MODES  = {{ tracks|map(attribute='rt_mode')|list|tojson }};
+var LABELS = {{ tracks|map(attribute='role_label')|list|tojson }};
+var PTS    = {};
+{% for t in tracks %}PTS[{{ t.rt_track }}] = {{ t.points|tojson }};{% endfor %}
+var TOLDEF = {{ r.ro_tol_default }};
+// Orientation of the Y axis: a target depth grows DOWNWARDS (deeper is deeper),
+// an output grows UPWARDS (more is more). Mixing both in one area would make the
+// curves run against each other, so the waveform decides: if there is a graded
+// track, the depth direction applies.
+var FLIP = ROLES.indexOf('zieltiefe') < 0;
+var XMAX   = AXIS === 'zeit' ? null : 1000;      // depth axis: fixed 0..100 %
+var T = {
+  save: {{ _('gespeichert')|tojson }}, unsaved: {{ _('ungespeicherte Änderungen')|tojson }},
+  sec: {{ _('s')|tojson }}, min: {{ _('min')|tojson }}, pct: {{ _('%')|tojson }},
+  away: {{ _('keine Kopplung: gibt nichts aus')|tojson }},
+  play: {{ _('Abspielen')|tojson }}, pause: {{ _('Anhalten')|tojson }},
+  lab_depth: {{ _('Tiefe (%)')|tojson }}, lab_value: {{ _('Wert (%)')|tojson }},
+  ramp_s: {{ _('Anfahrt (s)')|tojson }}, ramp_p: {{ _('Anfahrt (%)')|tojson }},
+  hold_s: {{ _('Halten (s)')|tojson }}, hold_p: {{ _('Halten (%)')|tojson }},
+  help_depth: {{ _('Tiefe in Prozent des eigenen kalibrierten Bereichs des Sklaven — 0 ist die Ruhelage, 100 der tiefste gemessene Punkt.')|tojson }},
+  help_value: {{ _('Prozent der Decke, die der Träger am Gerät selbst eingestellt hat — nicht Prozent der Geräteleistung. Was hier 70 % heißt, sind 70 % von dem, was er erlaubt hat.')|tojson }},
+  help_coupled: {{ _('Gekoppelt: der Wert der Kurve ist die Obergrenze, wie viel ankommt entscheidet sie.')|tojson }},
+  help_absolute: {{ _('Absolut: der Wert der Kurve kommt so heraus.')|tojson }},
+  broken: {{ _('Die Zeichenfläche konnte nicht starten')|tojson }}
+};
+
+var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+var sel = document.getElementById('tracksel');
+var cur = TRACKS.length ? TRACKS[0] : 0, dirty = false, drag = null;
+var PAD = {l: 46, r: 40, t: 14, b: 28};
+
+function xmax(){
+  if (XMAX) return XMAX;
+  var m = 1000;
+  for (var k in PTS) PTS[k].forEach(function(p){ if (p.x > m) m = p.x; });
+  return m;
+}
+function px(x){ return PAD.l + (x / xmax()) * (cv.width - PAD.l - PAD.r); }
+function py(v){
+  var f = Math.max(0, Math.min(100, v)) / 100;
+  if (FLIP) f = 1 - f;
+  return PAD.t + f * (cv.height - PAD.t - PAD.b);
+}
+function ux(sx){ return Math.max(0, Math.round((sx - PAD.l) / (cv.width - PAD.l - PAD.r) * xmax())); }
+function uv(sy){
+  var f = (sy - PAD.t) / (cv.height - PAD.t - PAD.b);
+  if (FLIP) f = 1 - f;
+  return Math.max(0, Math.min(100, Math.round(f * 100)));
+}
+
+function valueAt(pts, x){        // the same interpolation as routines.target_at()
+  if (!pts.length) return 0;
+  if (x <= pts[0].x) return pts[0].value;
+  for (var i = 0; i < pts.length - 1; i++){
+    if (x <= pts[i+1].x){
+      var s = pts[i+1].x - pts[i].x;
+      var f = s <= 0 ? 0 : (x - pts[i].x) / s;
+      return pts[i].value + (pts[i+1].value - pts[i].value) * f;
+    }
+  }
+  return pts[pts.length-1].value;
+}
+function tolAt(pts, x){
+  if (!pts.length) return 0;
+  if (x <= pts[0].x) return pts[0].tol;
+  for (var i = 0; i < pts.length - 1; i++){
+    if (x <= pts[i+1].x){
+      var s = pts[i+1].x - pts[i].x;
+      var f = s <= 0 ? 0 : (x - pts[i].x) / s;
+      return pts[i].tol + (pts[i+1].tol - pts[i].tol) * f;
+    }
+  }
+  return pts[pts.length-1].tol;
+}
+
+var COL = {zieltiefe: '#5bd18a', bestrafung: '#e0574a', stimulation: '#4aa3e0', belohnung: '#e0a33a'};
+function draw(){
+  cv.width = cv.clientWidth;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  // grid
+  ctx.strokeStyle = '#2a3340'; ctx.fillStyle = '#6b7785'; ctx.font = '11px system-ui'; ctx.lineWidth = 1;
+  [0,25,50,75,100].forEach(function(g){
+    ctx.beginPath(); ctx.moveTo(PAD.l, py(g)); ctx.lineTo(cv.width - PAD.r, py(g)); ctx.stroke();
+    ctx.fillText(g + '%', 6, py(g) + 4);
+  });
+  var unit = AXIS === 'zeit' ? 1000 : 10, lab = AXIS === 'zeit' ? T.sec : T.pct;
+  for (var i = 0; i <= 4; i++){
+    var xv = xmax() * i / 4, tx = (xv / unit).toFixed(xv / unit < 10 ? 1 : 0) + ' ' + lab;
+    ctx.fillText(tx, Math.min(px(xv) - 10, cv.width - PAD.r - ctx.measureText(tx).width + 30), cv.height - 8);
+  }
+  // first the other tracks pale, then the selected one
+  TRACKS.forEach(function(no, idx){ if (no !== cur) curve(no, idx, 0.28); });
+  TRACKS.forEach(function(no, idx){ if (no === cur) curve(no, idx, 1); });
+  if (play.on) marker();
+}
+function curve(no, idx, alpha){
+  var pts = PTS[no] || [], role = ROLES[idx], col = COL[role] || '#888';
+  if (!pts.length) return;
+  ctx.globalAlpha = alpha;
+  if (role === 'zieltiefe'){          // tolerance band only on the graded track
+    ctx.fillStyle = col; ctx.globalAlpha = alpha * 0.22;
+    ctx.beginPath();
+    pts.forEach(function(p, i){ var y = py(p.value - p.tol); i ? ctx.lineTo(px(p.x), y) : ctx.moveTo(px(p.x), y); });
+    for (var i = pts.length - 1; i >= 0; i--) ctx.lineTo(px(pts[i].x), py(pts[i].value + pts[i].tol));
+    ctx.closePath(); ctx.fill(); ctx.globalAlpha = alpha;
+  }
+  ctx.strokeStyle = col; ctx.lineWidth = no === cur ? 2 : 1.5;
+  ctx.beginPath();
+  pts.forEach(function(p, i){ i ? ctx.lineTo(px(p.x), py(p.value)) : ctx.moveTo(px(p.x), py(p.value)); });
+  ctx.stroke();
+  if (no === cur){
+    ctx.fillStyle = '#e8eef6';
+    pts.forEach(function(p){ ctx.beginPath(); ctx.arc(px(p.x), py(p.value), 4, 0, 6.284); ctx.fill(); });
+  }
+  ctx.globalAlpha = 1;
+}
+
+// --- Editing ---------------------------------------------------------------
+function hit(sx, sy){
+  var pts = PTS[cur] || [];
+  for (var i = 0; i < pts.length; i++)
+    if (Math.abs(px(pts[i].x) - sx) < 7 && Math.abs(py(pts[i].value) - sy) < 7) return i;
+  return -1;
+}
+function pos(e){ var r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+cv.addEventListener('mousedown', function(e){
+  var p = pos(e), i = hit(p[0], p[1]);
+  if (e.button === 2) return;
+  if (i >= 0){ drag = i; }
+  else {
+    var pts = PTS[cur] || (PTS[cur] = []);
+    pts.push({x: ux(p[0]), value: uv(p[1]), tol: ROLES[TRACKS.indexOf(cur)] === 'zieltiefe' ? TOLDEF : 0});
+    pts.sort(function(a, b){ return a.x - b.x; });
+    drag = pts.findIndex(function(q){ return q.x === ux(p[0]); });
+    mark();
+  }
+  draw();
+});
+cv.addEventListener('mousemove', function(e){
+  if (drag === null) return;
+  var p = pos(e), pts = PTS[cur];
+  pts[drag].x = ux(p[0]); pts[drag].value = uv(p[1]);
+  pts.sort(function(a, b){ return a.x - b.x; });
+  drag = pts.indexOf(pts.find(function(q){ return q.x === ux(p[0]) && q.value === uv(p[1]); }));
+  mark(); draw();
+});
+window.addEventListener('mouseup', function(){ drag = null; });
+cv.addEventListener('contextmenu', function(e){
+  e.preventDefault();
+  var p = pos(e), i = hit(p[0], p[1]);
+  if (i >= 0){ PTS[cur].splice(i, 1); mark(); draw(); }
+});
+function mark(){ dirty = true; document.getElementById('hint').textContent = '● ' + T.unsaved; }
+
+document.getElementById('btn_save').addEventListener('click', function(){
+  document.getElementById('save_track').value = cur;
+  document.getElementById('save_points').value =
+    JSON.stringify((PTS[cur] || []).map(function(p){ return [p.x, p.value, p.tol]; }));
+  document.getElementById('saveform').submit();
+});
+sel.addEventListener('change', function(){
+  cur = parseInt(sel.value, 10);
+  document.getElementById('pt_track').value = cur;
+  labels(); draw();
+});
+
+// --- Preview that runs -----------------------------------------------------
+// Shows what would be visible on the OLED and the NeoPixels. Time cannot be
+// seen in a still image — whether a two-second ramp-up feels hectic only
+// becomes apparent here (doc 19).
+var play = {on: false, t0: 0, x: 0};
+var SWEEP_MS = 6000;             // depth axis: one pass 0 -> 100 -> 0 in 6 s
+
+// The dot travels along the curve TIME-ACCURATELY: on the time axis x is the
+// elapsed time times the tempo, so 1x = real time. On the depth axis there is
+// no time — there one pass runs the depth up and down, so that one can see how
+// the tracks answer the position.
+function playX(){
+  var sp = parseFloat(document.getElementById('speed').value) || 1;
+  var ms = (Date.now() - play.t0) * sp;
+  if (AXIS === 'zeit'){
+    var span = xmax() || 1;
+    return ms % span;
+  }
+  var f = (ms % SWEEP_MS) / SWEEP_MS;          // 0..1
+  return (f < 0.5 ? f * 2 : (1 - f) * 2) * 1000;
+}
+
+function marker(){
+  var x = play.x;
+  // vertical line at the current point
+  ctx.save();
+  ctx.strokeStyle = '#e8eef6'; ctx.globalAlpha = 0.5; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(px(x), PAD.t); ctx.lineTo(px(x), cv.height - PAD.b); ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // One dot on EVERY curve — that way the interplay shows what happens at the
+  // same time (the punishment falls while the stimulation rises).
+  TRACKS.forEach(function(no, idx){
+    var pts = PTS[no] || [];
+    if (!pts.length) return;
+    var v = valueAt(pts, x), col = COL[ROLES[idx]] || '#888', me = (no === cur);
+    if (ROLES[idx] === 'zieltiefe'){       // make the tolerance band visible at the dot
+      var tl = tolAt(pts, x);
+      ctx.strokeStyle = col; ctx.globalAlpha = me ? 0.8 : 0.3; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(px(x), py(v - tl)); ctx.lineTo(px(x), py(v + tl)); ctx.stroke();
+    }
+    ctx.globalAlpha = me ? 0.3 : 0.15;     // halo
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(px(x), py(v), me ? 10 : 7, 0, 6.284); ctx.fill();
+    ctx.globalAlpha = me ? 1 : 0.55;       // dot
+    ctx.beginPath(); ctx.arc(px(x), py(v), me ? 5.5 : 4, 0, 6.284); ctx.fill();
+    ctx.strokeStyle = '#0e1116'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function bar(el, v){
+  var i = el && el.firstElementChild;
+  if (i) i.style.width = Math.max(0, Math.min(100, v)) + '%';
+}
+
+function xtext(x){
+  if (AXIS !== 'zeit') return (x / 10).toFixed(1) + ' ' + T.pct;
+  var s2 = x / 1000;
+  if (s2 < 60) return s2.toFixed(1) + ' ' + T.sec;
+  // 59.96 s must not appear as "1:60.0": round first, then split.
+  var m = Math.floor(s2 / 60), rest = s2 - m * 60;
+  if (rest >= 59.95){ m += 1; rest = 0; }
+  return m + ':' + ('0' + rest.toFixed(1)).slice(-4) + ' ' + T.min;
+}
+
+function tick(){
+  if (!play.on) return;
+  play.x = playX();
+  var soll = valueAt(PTS[cur] || [], play.x);
+  bar(document.getElementById('bar_soll'), soll);
+  // output: coupled tracks emit nothing without a reading (doc 19 §2.4)
+  var idx = TRACKS.indexOf(cur), out = soll, note = '';
+  if (ROLES[idx] !== 'zieltiefe' && MODES[idx] === 'gekoppelt'){ out = 0; note = ' · ' + T.away; }
+  bar(document.getElementById('bar_out'), out);
+  // All tracks in plain text, so that next to the picture one has the number
+  var parts = [xtext(play.x)];
+  TRACKS.forEach(function(no, idx2){
+    var v = Math.round(valueAt(PTS[no] || [], play.x));
+    var tag = (LABELS[idx2] || ('#' + no));
+    parts.push(tag + ' ' + v + ' %' +
+      (ROLES[idx2] === 'zieltiefe' ? ' ± ' + Math.round(tolAt(PTS[no] || [], play.x)) + ' %' : ''));
+  });
+  document.getElementById('playinfo').textContent = parts.join('  ·  ') + note;
+  draw();
+  requestAnimationFrame(tick);
+}
+
+document.getElementById('btn_play').addEventListener('click', function(){
+  play.on = !play.on; play.t0 = Date.now(); play.x = 0;
+  this.textContent = play.on ? ('\u275a\u275a ' + T.pause) : ('\u25b6 ' + T.play);
+  if (play.on) tick(); else { draw(); document.getElementById('playinfo').innerHTML = '&nbsp;'; }
+});
+// Change the tempo mid-run without the dot jumping: drag t0 along so that
+// playX() at the new tempo carries on exactly where the dot currently stands.
+document.getElementById('speed').addEventListener('change', function(){
+  if (!play.on) return;
+  var sp = parseFloat(this.value) || 1;
+  var ms = AXIS === 'zeit' ? (play.x % (xmax() || 1))
+                           : (play.x / 1000) * (SWEEP_MS / 2);   // rising branch
+  play.t0 = Date.now() - ms / sp;
+});
+
+// --- Explanatory texts that change with the selection ----------------------
+function labels(){
+  var idx = TRACKS.indexOf(cur), isTarget = ROLES[idx] === 'zieltiefe';
+  document.getElementById('lab_value').textContent = isTarget ? T.lab_depth : T.lab_value;
+  document.getElementById('wrap_tol').style.display = isTarget ? '' : 'none';
+  document.getElementById('lab_ramp').textContent = AXIS === 'zeit' ? T.ramp_s : T.ramp_p;
+  document.getElementById('lab_hold').textContent = AXIS === 'zeit' ? T.hold_s : T.hold_p;
+  document.getElementById('valuehelp').textContent = isTarget ? T.help_depth : T.help_value;
+}
+['axis','purpose'].forEach(function(k){
+  var s2 = document.getElementById('ed_' + k), o = document.getElementById('ed_' + k + '_help');
+  if (!s2 || !o) return;
+  function upd(){ o.textContent = s2.options[s2.selectedIndex].dataset.help || ''; }
+  s2.addEventListener('change', upd); upd();
+});
+// track forms: what does not fit the role is hidden instead of wrongly offered
+document.querySelectorAll('.trackform').forEach(function(f){
+  var role = f.querySelector('.t_role'), prof = f.querySelector('.t_profile'),
+      mode = f.querySelector('.t_mode'), help = f.querySelector('.t_help');
+  function upd(){
+    var isTarget = role.value === 'zieltiefe';
+    ['.t_profwrap', '.t_chanwrap', '.t_modewrap'].forEach(function(s3){
+      f.querySelector(s3).style.display = isTarget ? 'none' : '';
+    });
+    f.querySelector('.t_couplewrap').style.display = (!isTarget && mode.value === 'gekoppelt') ? '' : 'none';
+    var ok = null;
+    Array.prototype.forEach.call(prof.options, function(o){
+      o.hidden = o.dataset.role !== role.value;
+      if (!o.hidden && ok === null) ok = o;
+      if (!o.hidden && o.selected) ok = o;
+    });
+    if (ok && prof.options[prof.selectedIndex].dataset.role !== role.value) ok.selected = true;
+    help.textContent = isTarget ? '' : ((ok ? ok.dataset.desc + ' ' : '') +
+      (mode.value === 'gekoppelt' ? T.help_coupled : T.help_absolute));
+  }
+  role.addEventListener('change', upd); mode.addEventListener('change', upd);
+  prof.addEventListener('change', upd); upd();
+});
+
+document.getElementById('pt_track').value = cur;
+try {
+  labels();
+  window.addEventListener('resize', draw);
+  draw();
+} catch (err) {
+  var h = document.getElementById('hint');
+  if (h) h.textContent = '\u26a0 ' + T.broken + ': ' + err;
+  throw err;
+}
+})();
+</script>{% endblock %}

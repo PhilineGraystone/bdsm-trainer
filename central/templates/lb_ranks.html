@@ -1,0 +1,34 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Ränge{% endblock %}
+{% block content %}
+<h1>{{ _('Ränge') }} <span class="muted small">{{ _('Namen und Aufstiegsbedingungen (Doc 14 §4a)') }}</span></h1>
+<form method="post" class="panel"><input type="hidden" name="_csrf" value="{{ csrf }}">
+  <p class="small muted">{{ _('Die Zeile eines Rangs beschreibt die Bedingung für den Aufstieg') }} <b>{{ _('in den nächsten') }}</b> {{ _('Rang: mindestens so viele') }} <i>{{ _('unterschiedliche') }}</i> {{ _('bestandene Aufgaben in der Woche (Mindestnote), davon Wochenbester in n Aufgaben (Vergleich mit den anderen Sklaven, relativ zur Aufgabenstufe; zählt nur, wenn ≥ 2 Sklaven die Aufgabe gemacht haben). „Aufgaben = 0“ heißt: alle Aufgaben des Wochenplans. Abstieg: Wochenplan nicht vollständig oder kein Training — ohne Schonfrist.') }}</p>
+  <table><tbody>
+    <tr><td style="width:150px"><b>{{ _('Aufgaben') }}</b></td><td class="small">{{ _('So viele') }} <i>{{ _('unterschiedliche') }}</i> {{ _('Aufgaben muss
+      der Sklave in der Woche mindestens mit der Mindestnote bestehen.') }} <b>{{ _('0 = alle') }}</b> {{ _('Aufgaben des Wochenplans.') }}</td></tr>
+    <tr><td><b>{{ _('Mindestnote') }}</b></td><td class="small">{{ _('Welche Note ein Durchgang mindestens haben muss, damit die
+      Aufgabe für den Aufstieg zählt (A ist die beste).') }}</td></tr>
+    <tr><td><b>{{ _('Wochenbester') }}</b></td><td class="small">{{ _('In so vielen Aufgaben muss er der Beste der Woche sein — verglichen wird relativ zur Aufgabenstufe, und nur wenn mindestens zwei Sklaven die Aufgabe gemacht haben. 0 = wird nicht verlangt.') }}</td></tr>
+    <tr><td><b>{{ _('Plan vollständig') }}</b></td><td class="small">{{ _('Aufstieg nur, wenn alle Plan- und Nachsitz-Aufgaben der
+      Woche bestanden sind.') }}</td></tr>
+    <tr><td><b>{{ _('Alternativname') }}</b></td><td class="small">{{ _('Zweiter Namenssatz für dieselben Ränge — für die
+      Museumsanzeige, wo der Hauptsatz zu drastisch ist. Unten wird umgeschaltet.') }}</td></tr>
+  </tbody></table>
+  <table><thead><tr><th>{{ _('Rang') }}</th><th>{{ _('Name') }} ({{ _('aktiv') }}: {{ _('Alternativsatz') if rank_names=='alt' else _('Hauptsatz') }})</th><th>{{ _('Alternativname') }}</th><th>{{ _('Aufgaben') }}</th><th>{{ _('Mindestnote') }}</th><th>{{ _('Wochenbester') }}</th><th>{{ _('Plan vollständig') }}</th><th>{{ _('Sklaven') }}</th></tr></thead><tbody>
+  {% for r in rows %}<tr>
+    <td><b>{{ r.rank_no }}</b></td>
+    <td><input name="name_{{ r.rank_no }}" value="{{ r.rank_name }}" maxlength="40"></td>
+    <td><input name="alt_{{ r.rank_no }}" value="{{ r.rank_name_alt }}" maxlength="40"></td>
+    <td style="width:80px"><input type="number" name="tasks_{{ r.rank_no }}" value="{{ r.rank_up_tasks }}" min="0" max="20" {{ 'disabled' if r.rank_no==10 }}></td>
+    <td style="width:80px"><select name="grade_{{ r.rank_no }}" {{ 'disabled' if r.rank_no==10 }}>{% for g in 'ABCDEF' %}<option {{ 'selected' if r.rank_up_grade==g }}>{{ g }}</option>{% endfor %}</select></td>
+    <td style="width:80px"><input type="number" name="best_{{ r.rank_no }}" value="{{ r.rank_up_best }}" min="0" max="10" {{ 'disabled' if r.rank_no==10 }}></td>
+    <td><input type="checkbox" name="plan_{{ r.rank_no }}" value="1" {{ 'checked' if r.rank_up_plan }} {{ 'disabled' if r.rank_no==10 }}></td>
+    <td class="muted">{{ holders.get(r.rank_no, 0) }}</td>
+  </tr>{% endfor %}</tbody></table>
+  <p><label>{{ _('Aktiver Namenssatz') }}</label>
+    <label style="display:inline"><input type="radio" name="rank_names" value="main" {{ 'checked' if rank_names!='alt' }}> {{ _('Hauptsatz (Vorgabe: demütigend)') }}</label> &nbsp;
+    <label style="display:inline"><input type="radio" name="rank_names" value="alt" {{ 'checked' if rank_names=='alt' }}> {{ _('Alternativsatz (neutral, z. B. für die Museumsanzeige)') }}</label></p>
+  <p><button class="primary">{{ _('Speichern') }}</button> <span class="small muted">{{ _('Rang 10 ist der höchste: er wird gehalten, nicht mehr aufgestiegen. Änderungen wirken sofort auf Anzeige, Prognose und die nächste Wochenbewertung.') }}</span></p>
+</form>
+{% endblock %}

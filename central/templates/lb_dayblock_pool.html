@@ -1,0 +1,42 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}{{ _('Mystery-Pool') }} — {{ plan.dp_name }}{% endblock %}
+{% block content %}
+<h1>{{ _('Mystery-Pool') }}
+  <span class="muted small">{{ plan.dp_name }} · {{ _('Block') }} {{ block.db_pos }} · {{ block.db_minutes }} {{ _('min') }}</span>
+  <a class="btn right" href="{{ url_for('lb.dayplans_view') }}">{{ _('zurück zu den Tagesplänen') }}</a></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Angekreuzt wird, was in diesem Block <b>gezogen werden darf</b>. Die Zentrale wählt darin Zeitpunkt und Eintrag selbst; der Bildschirm zeigt bis dahin „?“. Im Prüfprotokoll steht <b>vorher</b>, was gezogen wurde — nur die Teilnehmerin weiß es nicht.') | safe }}</p>
+  <p class="small muted">{{ _('Der Pool ist die <b>Sicherheitsgrenze</b>: gezogen wird nur, was hier steht <b>und</b> was für sie ohnehin erlaubt ist. Decke, Auflagen, Budgets und die Aufgabensperren des Tagesplans gelten unverändert — der Pool kann nichts erlauben, was ohne ihn nicht auch möglich wäre.') | safe }}</p>
+  <p class="small muted">{{ _('Ein Pool darf Aufgaben <b>und</b> Belohnungen enthalten, nicht nur Strafen: einer, der beides kann, wirkt stärker als einer, der nur droht.') | safe }}</p>
+</div>
+
+<form method="post" class="panel">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <h2 style="margin-top:0">{{ _('Über den Kanal') }}</h2>
+  <div class="poolgrid">
+  {% for e in channel %}
+    <label class="atick"><input type="checkbox" name="entry" value="{{ e }}" {{ 'checked' if e in chosen }}>
+      <span class="mono">{{ e }}</span></label>
+  {% endfor %}
+  </div>
+  <p class="small muted">{{ _('Stufe 1 bis 3. Die Stärke selbst kommt aus der Kalibrierung der Teilnehmerin, nicht von hier.') }}</p>
+
+  <h2>{{ _('Aufgaben') }}</h2>
+  <div class="alist">
+  {% for r in rows %}
+    <div class="arow{{ ' on' if r.code in chosen }}">
+      <div class="ahead">
+        <label class="atick"><input type="checkbox" name="entry" value="{{ r.code }}"
+               {{ 'checked' if r.code in chosen }}> <b>{{ r.name }}</b></label>
+        <span class="small muted mono">{{ r.code }}</span>
+        {% if r.capability %}<span class="cap" title="{{ r.capability }}">{{ r.capability }}</span>{% endif %}
+        <span class="asum small muted">{{ r.desc|truncate(90) }}</span>
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+  <p style="margin-top:14px"><button class="primary">{{ _('Pool speichern') }}</button>
+    <span class="small muted">{{ _('Ein leerer Pool ist erlaubt — dieser Block zieht dann nichts und wird übersprungen.') }}</span></p>
+</form>
+{% endblock %}

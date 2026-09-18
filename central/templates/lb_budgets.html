@@ -1,0 +1,78 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}Budgets{% endblock %}
+{% block content %}
+<h1>{{ _('Budgets und Cooldowns') }} <span class="muted small">{{ _('wie oft, und wie dicht') }}</span></h1>
+
+<div class="panel">
+  <p class="small muted" style="margin-top:0">{{ _('Ein Budget sagt, wie oft etwas in einem Zeitraum passieren darf (Anzahl), ein Cooldown, wie dicht (Abstand). Eine Zeile für eine Teilnehmerin gilt zusätzlich zur Zeile für alle — die strengere gewinnt.') }}
+  <b>{{ _('Die Decke des Bestrafungskanals aus') }} <span class="mono">config.ini [safety]</span> {{ _('gilt unter jedem Budget') }}</b> — {{ _('sie steht hier als Zeile, ändern lässt sie sich hier nicht. Ein Budget kann nur verschärfen.') }}
+  {{ _('Ist ein Budget ausgeschöpft, feuert der Anlass „Budget ausgeschöpft“ im Regelwerk — einmal je Zeitraum.') }}</p>
+</div>
+
+<div class="panel">
+<table><thead><tr><th>{{ _('Was') }}</th><th>{{ _('Für wen') }}</th><th>{{ _('Zeitraum') }}</th><th>{{ _('Anzahl') }}</th><th>{{ _('Abstand') }}</th><th>{{ _('in der Pause') }}</th><th>{{ _('Notiz') }}</th><th></th></tr></thead><tbody>
+<tr class="muted">
+  <td><b>{{ _('Bestrafungen über den Kanal') }}</b><br><span class="small muted mono">{{ ceiling.key }}</span> · <span class="mono">config.ini [safety]</span></td>
+  <td class="small">{{ _('alle') }}</td><td class="small">{{ _('Tag') }}</td>
+  <td class="mono">{{ ceiling.max_count or '∞' }}</td><td class="mono">{{ ceiling.min_gap_s ~ ' s' if ceiling.min_gap_s else '–' }}</td>
+  <td class="small">{{ _('nachholen') }}</td><td class="small">{{ _('Decke — nicht über das Web änderbar') }}</td><td></td>
+</tr>
+{% for r in rows %}<tr {{ 'style=opacity:.45' if not r.bu_enabled }}>
+  <td><b>{{ r.label }}</b><br><span class="small muted mono">{{ r.bu_key }}</span></td>
+  <td class="small">{% if r.bu_slave %}{{ r.slave_name or r.bu_slave }}{% else %}{{ _('alle') }}{% endif %}</td>
+  <td class="small">{{ _('Tag') if r.bu_period == 'day' else _('Woche') }}</td>
+  <td class="mono">{{ r.bu_max_count if r.bu_max_count else '∞' }}</td>
+  <td class="mono">{{ r.bu_min_gap_s ~ ' s' if r.bu_min_gap_s else '–' }}</td>
+  <td class="small">{% if r.bu_key.startswith('activity') %}–{% else %}{{ _('nachholen') if r.bu_on_gap == 'queue' else _('verfällt') }}{% endif %}</td>
+  <td class="small muted">{{ r.bu_note or '' }}{% if r.bu_by %} <span class="mono">({{ r.bu_by }})</span>{% endif %}</td>
+  <td class="actions"><form class="inline" method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="bu_id" value="{{ r.bu_id }}">
+    <button name="op" value="toggle" class="sm">{{ 'aus' if r.bu_enabled else 'an' }}</button>
+    <button name="op" value="delete" class="sm danger" onclick="return confirm('{{ _('Budget löschen?') }}')">✕</button></form></td>
+</tr>{% else %}<tr><td colspan="8" class="muted">{{ _('Keine Budgets — dann gilt nur die Decke.') }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+
+<div class="grid">
+<div class="panel"><h2 style="margin-top:0">{{ _('Budget setzen') }}</h2>
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+    <label>{{ _('Was') }}</label>
+    <select name="key" id="bu_key">{% for k, v in KEYS.items() %}<option value="{{ k }}" data-help="{{ v[1] }}">{{ v[0] }}</option>{% endfor %}</select>
+    <p class="small muted" style="margin:4px 0 0" id="bu_help"></p>
+    <div id="bu_action_row" style="display:none"><label>{{ _('Nur diese Aufgabe') }}</label>
+      <select name="action"><option value="">{{ _('alle Aufgaben') }}</option>{% for a in TRAINABLE %}<option value="{{ a.code }}">{{ a.name }}</option>{% endfor %}</select></div>
+    <label>{{ _('Für wen') }}</label>
+    <select name="slave"><option value="0">{{ _('alle') }}</option>{% for s in slaves %}<option value="{{ s.slave_id }}">{{ s.slave_name }}</option>{% endfor %}</select>
+    <label>{{ _('Zeitraum') }}</label>
+    <select name="period"><option value="day">{{ _('Tag') }}</option><option value="week">{{ _('Woche') }}</option></select>
+    <div class="row">
+      <div><label>{{ _('Anzahl') }}</label><input type="number" name="max_count" min="1" max="100000" placeholder="∞"></div>
+      <div><label>{{ _('Abstand (s)') }}</label><input type="number" name="min_gap_s" min="1" max="604800" placeholder="–"></div>
+    </div>
+    <label>{{ _('In der Pause') }}</label>
+    <select name="on_gap" id="bu_on_gap"><option value="queue">{{ _('nachholen — wartet und kommt dann') }}</option><option value="drop">{{ _('verfällt') }}</option></select>
+    <label>{{ _('Notiz') }}</label><input name="note" maxlength="255" placeholder="{{ _('wofür dieses Budget gedacht ist') }}">
+    <p style="margin-top:14px"><button class="primary">{{ _('Speichern') }}</button></p>
+    <p class="small muted">{{ _('Dieselbe Zeile (Was, Für wen, Zeitraum) wird überschrieben, nicht verdoppelt. Ein leeres Feld heißt: keine Grenze dieser Art.') }}</p>
+  </form>
+</div>
+<div class="panel"><h2 style="margin-top:0">{{ _('Wozu das gut ist') }}</h2>
+  <table><tbody>
+  {% for k, v in KEYS.items() %}<tr><td><b>{{ v[0] }}</b><br><span class="small muted mono">{{ k }}</span></td><td class="small">{{ v[1] }}</td></tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted">{{ _('Beispiel „höchstens drei Verstöße pro Woche“: Bestrafungen · alle · Woche · Anzahl 3. Die vierte wird abgewiesen, und im Regelwerk kann auf „Budget ausgeschöpft“ mit Bedingung „Budget: Bestrafungen“ eine Auflage folgen.') }}</p>
+  <p class="small muted">{{ _('Bei Durchgängen heißt Anzahl: so viele zählen je Tag für die Rangliste (Anti-Grinding). Der Abstand ist eine Pause zwischen zwei Durchgängen derselben Aufgabe; der Tagesplan nimmt dann erst eine andere.') }}</p>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+  var k = document.getElementById('bu_key'), h = document.getElementById('bu_help'),
+      ar = document.getElementById('bu_action_row'), og = document.getElementById('bu_on_gap');
+  function upd(){
+    h.textContent = k.options[k.selectedIndex].dataset.help || '';
+    ar.style.display = k.value === 'activity' ? '' : 'none';
+    og.value = k.value === 'reward' ? 'drop' : 'queue';
+  }
+  k.addEventListener('change', upd); upd();
+})();
+</script>{% endblock %}

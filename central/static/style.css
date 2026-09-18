@@ -1,0 +1,163 @@
+/* SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later */
+:root{--bg:#14161a;--panel:#1d2026;--line:#2c313a;--text:#e6e6e6;--muted:#9aa3ad;--acc:#7cb7ff;--ok:#5ec27a;--warn:#e8b84a;--err:#e5646b;--emg:#ff2d55}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+header{display:flex;align-items:center;gap:22px;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header .brand{font-weight:700;letter-spacing:.06em;color:#fff}header nav a{margin-right:14px;color:var(--text)}header nav a.active{color:var(--acc);border-bottom:2px solid var(--acc)}
+header .right{margin-left:auto;display:flex;align-items:center;gap:12px;color:var(--muted)}
+main{max-width:1240px;margin:0 auto;padding:20px}
+h1{font-size:22px;margin:0 0 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}h2{font-size:17px;margin:22px 0 10px;color:#fff}
+/* Buttons in headings would otherwise inherit 22px bold and overlap (Philine 2026-09-10) */
+h1 button,h1 .btn,h2 button,h2 .btn{font-size:13px;font-weight:400;padding:4px 10px;line-height:1.3}
+.right{margin-left:auto}.zeugnis h1{display:block}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+tr:hover td{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;border:1px solid var(--line);color:var(--muted)}
+/* Capabilities of a device (libs/devicemodels.py CAP_LABELS) */
+[hidden]{display:none!important}
+.caps{display:flex;flex-wrap:wrap;gap:4px}.cap{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11.5px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}.cap.miss{color:var(--err);border-color:var(--err)}.cap.extra{color:var(--acc);border-color:var(--acc)}
+.pill.on{color:var(--ok);border-color:var(--ok)}.pill.off{color:var(--err);border-color:var(--err)}.pill.act{color:var(--warn);border-color:var(--warn)}.pill.emg{color:#fff;background:var(--emg);border-color:var(--emg)}
+.muted{color:var(--muted)}.small{font-size:12.5px}.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+button,.btn{background:#2a3038;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
+button:hover,.btn:hover{border-color:var(--acc)}button.primary{background:var(--acc);color:#0b1220;border-color:var(--acc);font-weight:600}
+button.danger{background:#3a1f22;border-color:var(--err);color:#ffd7d9}button.emg{background:var(--emg);border-color:var(--emg);color:#fff;font-weight:700;letter-spacing:.05em}
+.sm{padding:2px 8px;font-size:12.5px;font-weight:400;vertical-align:middle}form.inline{display:inline}
+input,select,textarea{background:#12151a;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;width:100%}
+input[type=checkbox],input[type=radio]{width:auto}label{display:block;margin:10px 0 4px;color:var(--muted);font-size:13px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1 1 180px}
+.flash{padding:9px 14px;border-radius:6px;margin-bottom:12px;border:1px solid}.flash.ok{border-color:var(--ok);color:var(--ok)}.flash.error{border-color:var(--err);color:#ffb3b8}.flash.warn{border-color:var(--warn);color:var(--warn)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:13.5px}.kv div:nth-child(odd){color:var(--muted)}
+.emgbox{border:2px solid var(--emg);border-radius:8px;padding:12px 16px;background:#2a1218}
+.status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:var(--err)}.status-dot.on{background:var(--ok)}
+.login{max-width:360px;margin:12vh auto}
+.stepnum{color:var(--muted);width:36px}.actions td{white-space:nowrap}
+.hidden{display:none}
+
+.help{color:#b9c2cc;margin:4px 0 2px;line-height:1.4}
+
+/* Logbook (doc 14) */
+header nav .menu{position:relative;display:inline-block;margin-right:14px}header nav .menu>a{margin-right:0}
+header nav .menu .dropdown{display:none;position:absolute;left:0;top:22px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 0;min-width:170px;z-index:9}
+header nav .menu:hover .dropdown{display:block}header nav .menu .dropdown a{display:block;padding:6px 14px;margin:0}
+svg.grade,img.grade{vertical-align:middle;margin-right:4px}
+.gradecell{white-space:nowrap;font-weight:600}
+.rankbadge{display:inline-block;padding:2px 10px;border-radius:12px;background:#2a3038;border:1px solid var(--acc);color:#fff;font-weight:600}
+.forecast{padding:8px 12px;border-radius:6px;border:1px solid var(--line);margin:8px 0}
+.forecast.up{border-color:var(--ok);color:var(--ok)}.forecast.down{border-color:var(--err);color:#ffb3b8}.forecast.hold{color:var(--muted)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;background:#2a3038;border:1px solid var(--warn);color:var(--warn);font-size:12px;margin:2px 4px 2px 0}
+.priv{display:inline-block;padding:2px 8px;border-radius:10px;background:#1f2e26;border:1px solid var(--ok);color:var(--ok);font-size:12px;margin:2px 4px 2px 0}
+.plan-status.done{color:var(--ok)}.plan-status.open{color:var(--warn)}.plan-status.failed{color:var(--err)}.plan-status.proposed{color:var(--acc)}
+.zeugnis{background:#fff;color:#111;border-radius:6px;padding:28px 36px;max-width:820px;font-family:Georgia,serif}
+.zeugnis h1{font-family:Georgia,serif;letter-spacing:.12em;color:#111;margin:0 0 4px}.zeugnis h2{color:#333}.zeugnis table{color:#111;font-size:13.5px}.zeugnis th{color:#555}.zeugnis td,.zeugnis th{border-color:#ddd}
+.zeugnis .stamp{float:right;border:2px solid #900;color:#900;padding:4px 10px;transform:rotate(-6deg);font-weight:700}
+@media print{header,.noprint{display:none}body{background:#fff}main{max-width:none;padding:0}}
+.tabs a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:6px;margin-right:6px}.tabs a.on{border-color:var(--acc);color:#fff}
+.lang{opacity:.75}.lang a{color:var(--muted);text-decoration:none}.lang a:hover{color:var(--fg)}.lang b{color:var(--fg)}
+
+/* Calibration rows in the device list (slave page).
+   State and controls sit next to each other as one row; wrapping happens only
+   BETWEEN the parts, never inside a pair such as "A 100 %". Before that the
+   percent sign slipped onto the next line and the label stood far away from
+   its field (note by Philine 2026-09-11). */
+.calrow{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;margin-top:5px}
+.nowrap{white-space:nowrap;color:var(--muted);font-size:13px;display:inline-flex;align-items:center;gap:4px}
+/* Percent field: as wide as three digits, not as wide as the cell.
+   input{width:100%} from the base rule would otherwise blow it up. */
+input.pct{width:3.6em;padding:3px 6px;text-align:right;font-size:13px}
+/* The delete button is set apart - it takes away every output the slave has on
+   this device. A gap instead of a flex spacer: the spacer pushed it onto a line
+   of its own in narrow columns. */
+.calrow .del{margin-left:10px}
+/* Label of a calibration row - fixed width, so that "Bestrafung" and
+   "Belohnung" line their fields up underneath each other. */
+.callabel{flex:1 0 100%;color:var(--muted);font-size:13px;margin-top:2px}
+/* The label takes a line of its own. In narrow columns level 1 would otherwise
+   slip next to the label and 2/3 onto the next line - three fields of equal
+   standing that do not look equal. */
+
+/* Tab cards of the slave page (request by Philine 2026-09-12).
+   The rule that hides cards hangs on .js — and that class is set by the script,
+   not before. Without JavaScript it never takes hold, and then all cards stand
+   underneath each other as before. An administration page where half of the
+   controls depend on a script would be a bad bargain. */
+.tabs{display:flex;flex-wrap:wrap;gap:2px;margin:14px 0 0;border-bottom:1px solid var(--line)}
+.tabs a{padding:7px 13px;border:1px solid transparent;border-bottom:none;border-radius:7px 7px 0 0;
+        color:var(--muted);text-decoration:none;font-size:14px;white-space:nowrap}
+.tabs a:hover{color:var(--fg);background:#23262d}
+.tabs a.on{color:var(--fg);background:var(--panel);border-color:var(--line);
+           /* The active tab closes the separating line downwards - otherwise
+              it looks like a box that happens to stick to the top. */
+           margin-bottom:-1px;padding-bottom:8px}
+.tabs .pill{margin-left:5px}
+.js .tabpane{display:none}
+.js .tabpane.on{display:block}
+.tabpane{padding-top:14px}
+/* Profile picker in the level row. select{width:100%} from the base rule
+   would drag it across half the column; here it should be as wide as its own
+   text and stay next to the three percent fields. */
+select.prof{width:auto;max-width:17em;padding:3px 6px;font-size:13px}
+/* The try button belongs to ITS field and therefore sits right beside it,
+   without the 4px gap of the other pairs - otherwise one reads it as a fourth
+   button of the row and not as "this level". It puts out current; which level
+   that is must never be a question of matching things up. */
+.calrow .try{margin-left:2px;padding:1px 6px;line-height:1.4;font-size:11px}
+.calrow .try[disabled]{opacity:.4}
+
+/* Device health, doc 42 point 2: two colours and nothing in between. The dot
+   carries the reasons in its title; the list beside it is for the device page. */
+.health{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:6px;background:var(--ok);box-shadow:0 0 0 2px rgba(0,0,0,.15)}
+.health.red{background:var(--err)}
+.health-list{margin:6px 0 0;padding:0;list-style:none}
+.health-list li{color:var(--err);font-size:.9em}
+
+/* V-Cage proximity bar (doc 42 point 3). The mark is the threshold. */
+.cagebar{display:inline-block;position:relative;width:120px;height:10px;border:1px solid var(--muted);border-radius:5px;vertical-align:middle;overflow:hidden;background:rgba(0,0,0,.15)}
+.cagebar .fill{display:block;height:100%;background:var(--ok);transition:width .4s}
+.cagebar.near .fill{background:var(--warn)}
+.cagebar.out .fill{background:var(--err)}
+.cagebar .mark{position:absolute;left:33%;top:-2px;width:2px;height:14px;background:var(--text)}
+.cagetext{margin-left:6px;font-size:.9em}.cagetext.out{color:var(--err)}.cagetext.near{color:var(--warn)}.cagetext.in{color:var(--ok)}
+
+/* Capability state (doc 42 point 4): degraded = the model has it, the device cannot use it today;
+   comp = a component the device reported out. */
+.cap.degraded{color:var(--err);border-color:var(--err);text-decoration:line-through}
+.cap.comp{color:var(--err);border-color:var(--err);font-family:monospace}
+
+/* Task decisions of a day plan (doc 58 section 5). The first screen in the new
+   style: tick what the central must not pick by itself, settings only for what
+   is ticked, folded behind a line that says what is set. */
+.alist .arow{border-bottom:1px solid var(--line);padding:7px 0}
+.alist .arow:last-child{border-bottom:0}
+.alist .arow.on{background:rgba(232,184,74,.06);border-radius:6px;padding-left:8px;padding-right:8px}
+.ahead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.atick{display:inline-flex;align-items:center;gap:7px;margin:0;color:var(--text);cursor:pointer}
+.asum{margin-left:auto;color:var(--warn)}
+.afold{padding:1px 8px;line-height:1.2}
+.aopts{padding:4px 0 8px 26px}
+/* The bar is one day, midnight to midnight. Ticks every three hours, so one can
+   see 22:00 without counting. */
+.tbarwrap{margin-top:10px;max-width:640px}
+.tbar{position:relative;height:26px;border:1px solid var(--line);border-radius:5px;background:#12151a;cursor:ew-resize;
+      background-image:repeating-linear-gradient(to right,var(--line) 0 1px,transparent 1px calc(100%/8))}
+.tsel{position:absolute;top:0;bottom:0;background:var(--warn);opacity:.55}
+.tscale{display:flex;justify-content:space-between;margin-top:2px}
+/* Mystery pool: the channel entries as a compact grid, the tasks as the same
+   row list as the task decisions (doc 58 section 6). */
+.poolgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px 14px;margin:8px 0}
+/* Narrowing limits inside the same row (doc 60 section 4): they apply whether
+   or not the task is blocked, so they sit below the block settings. */
+.anarrow{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+/* Budget rows of the scenario editor (2.5). Same idea as above: pick the key
+   from a list instead of typing five values in a fixed order into a text box.
+   Narrow cells, no zebra - it is a form, not a report. */
+.btab{width:100%;margin:2px 0 4px}
+.btab th{font-weight:normal;color:var(--muted);font-size:.85em;padding:0 8px 2px 0;text-align:left}
+.btab td{padding:2px 8px 2px 0;vertical-align:middle;border:0}
+.btab select,.btab input{margin:0}
+.btab td:first-child select{min-width:210px}
+/* The last two columns hold words, not numbers - without a floor the first
+   column eats them and one reads "verfäl…" instead of "verfällt". */
+.btab td:nth-child(2) select{min-width:104px}
+.btab td:last-child select{min-width:132px}

@@ -1,0 +1,86 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}{{ row.pro_name }}{% endblock %}
+{% import '_findings.html' as fnd %}
+{% block content %}
+<h1>{{ row.pro_name }} <span class="muted" style="font-size:14px">{{ row.pro_functions }}</span> <a class="btn sm" href="{{ url_for('program_edit', pid=row.pro_id) }}">{{ _('Bearbeiten') }}</a>
+<form class="inline" method="post" action="{{ url_for('program_copy', pid=row.pro_id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}">
+  <button class="sm" title="{{ _('Legt eine Kopie mit allen Schritten an — zugeordnet ist sie niemandem.') }}">{{ _('duplizieren') }}</button></form></h1>
+{% if warnings %}<div class="flash warn">
+  <b>{{ _('Hinweise zum Ablauf') }}</b> {{ _('— kein Fehler, aber fast sicher nicht so gemeint:') }}
+  <ul style="margin:6px 0 0 18px">{% for w in warnings %}<li>{{ _('Schritt mit') }} {{ w.code }}: {{ w.text }}</li>{% endfor %}</ul>
+</div>{% endif %}
+{# The same check as on the slave, seen from the other side: this program
+   against the devices of every person it has been assigned to. #}
+{% if gaps %}<div class="panel" style="border-color:var(--warn)">
+  <h2 style="margin-top:0">{{ _('Bei wem dieses Programm nicht aufgeht') }}</h2>
+  {% for g in gaps %}
+  <div style="margin:.7em 0">
+    <b><a href="{{ url_for('slave_detail', sid=g.slave_id) }}">{{ g.name }}</a></b>
+    <span class="small muted">· {{ _('{n} Stellen', n=g.n) }}</span>
+    {% if g.missing %}<span class="pill warn">{{ _('fehlt') }} {{ g.missing|join(', ') }}</span>{% endif %}
+    {{ fnd.finding_list(g.findings) }}
+  </div>
+  {% endfor %}
+</div>{% endif %}
+<div class="grid" style="grid-template-columns:3fr 2fr">
+<div>
+<div class="panel"><h2 style="margin-top:0">{{ _('Schritte') }}
+  <form method="get" class="inline" style="float:right;font-size:13px;font-weight:400">
+    <label style="display:inline;margin:0" class="muted small">{{ _('Vorschau für') }}</label>
+    <select name="for" onchange="this.form.submit()" style="width:auto;display:inline-block">
+      <option value="">{{ _('alle') }}</option>
+      {% for sl in all_slaves %}<option value="{{ sl.slave_id }}" {{ 'selected' if preview==sl.slave_id }}>{{ sl.slave_name }}</option>{% endfor %}
+    </select></form></h2>
+<table><thead><tr><th>#</th><th>{{ _('Aktion') }}</th><th>{{ _('Parameter') }}</th><th></th></tr></thead><tbody>
+{% for s in steps %}<tr>
+  <td class="stepnum">{{ loop.index }}</td>
+  <td><b>{{ s.action.name if s.action else s.pc_command }}</b><br><span class="small muted">{{ s.pc_command }}{% if s.action and s.action.capability %} · {{ _('braucht') }} <span class="cap {{ 'miss' if s.missing or s.unknown_dev }}" title="{{ s.action.capability }} — {{ cap_list([s.action.capability])[0][2] }}{% if s.missing %} · {{ _('dieser Sklave hat kein Gerät dafür') }}{% elif s.unknown_dev %} · {{ _('in der Anlage ist kein Gerät mit dieser Funktion eingetragen') }}{% endif %}">{{ cap_list([s.action.capability])[0][1] }}</span>{% endif %}{% if s.missing %} <span class="pill off">{{ _('Gerät fehlt') }}</span>{% endif %}</span></td>
+  <td class="small">{% if s.error %}<span class="pill off">{{ s.error }}</span>{% elif s.params %}{% for p in s.action.params %}<span class="pill" title="{{ p.name }}{% if p.description %} — {{ p.description }}{% endif %}">{{ p.label or p.name }} = {{ s.params[p.name] }}{{ (' ' ~ p.unit) if p.unit }}</span> {% endfor %}{% else %}<span class="muted">–</span>{% endif %}</td>
+  <td class="actions">
+    <form class="inline" method="post" action="{{ url_for('step_op', pid=row.pro_id, sid=s.pc_id, op='up') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm" {{ 'disabled' if loop.first }}>▲</button></form>
+    <form class="inline" method="post" action="{{ url_for('step_op', pid=row.pro_id, sid=s.pc_id, op='down') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm" {{ 'disabled' if loop.last }}>▼</button></form>
+    <form class="inline" method="post" action="{{ url_for('step_op', pid=row.pro_id, sid=s.pc_id, op='delete') }}" onsubmit="return confirm('Schritt löschen?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="sm danger">✕</button></form>
+  </td>
+</tr>{% else %}<tr><td colspan="4" class="muted">{{ _('Noch keine Schritte. Rechts einen hinzufügen.') }}</td></tr>{% endfor %}
+</tbody></table>
+<p class="small muted">{{ _('Ablauf: der Reihe nach. WAIT und SHOCK erzeugen Wartezeiten; Modi und das Magnetschloss laufen im Gerät weiter, bis REMOTE_CONTROL (Modus aus), UNLOCK oder ihre Maximaldauer greift — deshalb gehört hinter einen Modus oder MAGLOCK ein WAIT über die gewünschte Dauer. Im Tagesmodell wählt die Zentrale das Programm zu einer Wochenplanaufgabe selbst und überschreibt dabei deren Zielwert; die Aufgabenliste hier ist auf die Geräte gefiltert, die in der Anlage eingetragen sind.') }}</p>
+</div>
+<div class="panel"><h2 style="margin-top:0">{{ _('Zugeordnet bei') }}</h2>
+{% for u in users %}<a href="{{ url_for('slave_detail', sid=u.slave_id) }}">{{ u.slave_name }}</a>{% if u.active %} <span class="pill act">{{ _('aktiv') }}</span>{% endif %}{% if not loop.last %} · {% endif %}{% else %}<span class="muted">{{ _('niemandem') }}</span>{% endfor %}
+</div>
+</div>
+<div class="panel"><h2 style="margin-top:0">{{ _('Schritt hinzufügen') }}</h2>
+<form method="post" action="{{ url_for('step_add', pid=row.pro_id) }}" id="addstep"><input type="hidden" name="_csrf" value="{{ csrf }}">
+  <label>{{ _('Aktion') }}</label>
+  <select name="action" id="actionsel" onchange="showParams(this.value)">
+  {% for a in actions_list %}<option value="{{ a.code }}" {{ 'selected' if a.code==sel }}>{{ a.name }} ({{ a.code }}){{ ' · Logbuch' if a.trainable }}</option>{% endfor %}
+  </select>
+  {% for a in actions_list %}
+  <div class="params {{ '' if a.code==sel else 'hidden' }}" id="params-{{ a.code }}">
+    <p class="small muted" style="margin:8px 0 0">{{ a.description }}{% if a.physical %} <span class="pill act">{{ _('wirkt körperlich') }}</span>{% endif %}{% if a.trainable %} <span class="pill on" title="{{ _('Durchgang mit Note und Punkten im Logbuch; Aufgabenstufe des Sklaven verschärft die Parameter') }}">{{ _('Logbuch') }}{{ ' · ' + _('blockierend') if a.blocking }}</span>{% endif %}{% if a.capability %} · {{ _('braucht') }} <span class="cap" title="{{ a.capability }} — {{ cap_list([a.capability])[0][2] }}">{{ cap_list([a.capability])[0][1] }}</span>{% endif %}</p>
+    {% for p in schema[a.code] %}
+      <label><b style="color:var(--text)">{{ p.label }}</b> <span class="mono">{{ p.name }}</span>{% if p.unit %} · {{ p.unit }}{% endif %}
+        · {% if p.min is not none or p.max is not none %}{{ p.min if p.min is not none else '…' }} {{ _('bis') }} {{ p.max if p.max is not none else '…' }}{% endif %}
+        {% if p.required %}<span class="pill act">{{ _('Pflicht') }}</span>{% else %}<span class="pill">{{ _('leer =') }} {{ p.default }}</span>{% endif %}</label>
+      {% if p.ref %}{# A picker instead of guessing a number: the list shows only what fits this parameter #}
+      <select name="p_{{ p.name }}" data-req="0" {{ 'disabled' if a.code!=sel }}>
+        {% if not p.required %}<option value="0">{{ _('— keine —') }}</option>{% endif %}
+        {% for r in refs.get(p.ref, []) %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+      </select>
+      {% if not refs.get(p.ref) %}<div class="small help" style="color:var(--warn)">{{ _('Keine passende Wellenform vorhanden — erst eine anlegen.') }}</div>{% endif %}
+      {% else %}
+      <input type="{{ 'text' if p.text else 'number' }}" name="p_{{ p.name }}" {% if p.min is not none %}min="{{ p.min }}"{% endif %} {% if p.max is not none %}max="{{ p.max }}"{% endif %} placeholder="{{ p.default if p.default is not none else '' }}" data-req="{{ 1 if p.required else 0 }}" {{ 'required' if p.required and a.code==sel }} {{ 'disabled' if a.code!=sel }}>
+      {% endif %}
+      {% if p.description %}<div class="small help">{{ p.description }}</div>{% endif %}
+    {% endfor %}
+    {% if not schema[a.code] %}<p class="small muted">{{ _('Keine Parameter.') }}</p>{% endif %}
+  </div>
+  {% endfor %}
+  <p style="margin-top:14px"><button class="primary">{{ _('Schritt anhängen') }}</button></p>
+</form>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+function showParams(code){document.querySelectorAll('#addstep .params').forEach(function(el){var on=(el.id==='params-'+code);el.classList.toggle('hidden',!on);el.querySelectorAll('input,select').forEach(function(i){i.disabled=!on;i.required=on&&i.dataset.req==='1';});});}
+</script>{% endblock %}

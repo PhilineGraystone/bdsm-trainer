@@ -1,0 +1,665 @@
+{# SPDX-License-Identifier: LicenseRef-Devious-City-1.0-or-later #}
+{% extends 'base.html' %}{% block title %}{{ row.slave_name }}{% endblock %}
+{% import '_findings.html' as fnd %}
+{% import '_collar.html' as coll %}
+{% block content %}
+{# INDEX CARDS (requested by Philine 2026-09-12).
+   The page had everything stacked one below the other: assignment, calibration,
+   daily schedule, rank, requirements, weekly plan, history. Whoever wanted to
+   change an electrode strength scrolled past the requirements — and whoever
+   imposed a requirement scrolled past the calibration. Both are things one is
+   NOT supposed to touch in passing.
+
+   The cards separate by SUBJECT, not by component. The anchor in the address
+   (#kalibrierung) selects the card: that way the return paths of the forms
+   land again where they were submitted from.
+
+   Without JavaScript all cards are visible — then it is the long page from
+   before again, but nothing is missing. #}
+<h1>{{ row.slave_name }} <span class="muted" style="font-size:14px">#{{ row.slave_id }} · {{ _('RFID') }} <span class="mono">{{ row.slave_rfid }}</span></span> <a class="btn sm" href="{{ url_for('slave_edit', sid=row.slave_id) }}">{{ _('Bearbeiten') }}</a></h1>
+
+{# The calibration run sits ABOVE the cards: it changes what the installation
+   does at all, and must not be hidden on a card that happens not to be open
+   at the moment (doc 33). #}
+{% if calmode and calmode.running %}
+<div class="panel" style="border-color:var(--warn);border-width:2px">
+  <b>{{ _('Kalibrierdurchgang läuft.') }}</b>
+  {{ _('Sie ist angemeldet, aber es läuft kein Programm und kein Tagesplan — ihr Tag ist unberührt. Mit dem Abmelden ist der Durchgang zu Ende.') }}
+</div>
+{% elif calmode and calmode.armed %}
+<div class="panel" style="border-color:var(--warn)">
+  <b>{{ _('Kalibrierdurchgang ist scharf gestellt.') }}</b>
+  {{ _('Die nächste Anmeldung startet kein Programm und keinen Tag.') }}
+  {% if calmode.by %}<span class="small muted">{{ _('gesetzt von {who}', who=calmode.by) }}{% if calmode.since %} · {{ calmode.since|ts }}{% endif %}</span>{% endif %}
+  {% if calmode.stale_h >= 12 %}<div class="small" style="color:var(--err);margin-top:4px">{{
+    _('Steht seit {h} Stunden scharf. Wenn das nicht mehr gewollt ist, bitte abschalten — sonst verliert sie bei der nächsten Anmeldung ihren Tagesstart.', h=calmode.stale_h) }}</div>{% endif %}
+</div>
+{% endif %}
+
+<nav class="tabs" id="tabs">
+  <a href="#ueberblick" data-tab="ueberblick">{{ _('Überblick') }}{% if findings %} <span class="pill warn">{{ findings|length }}</span>{% endif %}</a>
+  <a href="#zuordnung" data-tab="zuordnung">{{ _('Programme und Geräte') }}</a>
+  <a href="#kalibrierung" data-tab="kalibrierung">{{ _('Kalibrierung') }}{% if calmode and (calmode.armed or calmode.running) %} <span class="pill act">!</span>{% endif %}</a>
+  {% if lb and day_enabled %}<a href="#tag" data-tab="tag">{{ _('Tagesablauf') }}</a>{% endif %}
+  {% if lb %}<a href="#rang" data-tab="rang">{{ _('Rang, Auflagen, Kanal') }}</a>
+  <a href="#wochenplan" data-tab="wochenplan">{{ _('Wochenplan') }}</a>
+  <a href="#verlauf" data-tab="verlauf">{{ _('Verlauf') }}</a>{% endif %}
+  <a href="#foto" data-tab="foto">{{ _('Foto') }}</a>
+</nav>
+
+{# ------------------------------------------------------------------ #}
+<section class="tabpane" data-pane="ueberblick">
+{# OVERVIEW — photo, current task, upcoming tasks, state of the devices.
+   Nothing else (default set by Philine 2026-09-13: „no bells and whistles").
+   Rank, points and requirements have cards of their own; whoever squeezes them
+   in here as well turns the overview into a second full view — and then a
+   glance at it shows nothing again. #}
+<div class="panel">
+  <div style="display:flex;gap:1.4em;flex-wrap:wrap;align-items:flex-start">
+
+    {# --- Photo ------------------------------------------------------ #}
+    <div style="flex:0 0 160px">
+      {% if photo %}
+        <img src="{{ url_for('slave_photo', sid=row.slave_id) }}?v={{ now.timestamp()|int }}"
+             alt="{{ _('Foto') }}"
+             style="width:160px;height:200px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">
+      {% else %}
+        <div style="width:160px;height:200px;border-radius:8px;background:#23262d;display:flex;
+                    align-items:center;justify-content:center" class="muted small">
+          <a href="#foto" data-tab="foto">{{ _('kein Foto') }}</a>
+        </div>
+      {% endif %}
+    </div>
+
+    {# --- What she is doing RIGHT NOW ---------------------------------- #}
+    <div style="flex:1 1 20em;min-width:18em">
+      <h2 style="margin-top:0">{{ _('Aktuelle Aufgabe') }}</h2>
+      {% if not sess %}
+        <p class="muted" style="margin:0">{{ _('Nicht angemeldet.') }}</p>
+      {% elif sess.calibration_mode %}
+        <p style="margin:0"><span class="pill on">{{ _('KALIBRIERUNG') }}</span></p>
+        <p class="small muted" style="margin:.4em 0 0">{{ _('Kein Programm, kein Tag — nichts wird gewertet.') }}</p>
+      {% else %}
+        {% set day = sess.day %}
+        {% set prog = sess.progress %}
+        {# progress() returns the whole list with one marker — the running
+           step is the one that carries 'current'. #}
+        {% set cur = (prog.steps|selectattr('current')|list|first) if prog and prog.steps else None %}
+        {% if day and day.instruction %}
+          {# A running instruction trumps everything else: that is what she is
+             supposed to be doing at this moment. #}
+          <p style="margin:0;font-size:1.1em"><b>{{ day.instruction.text }}</b></p>
+          <p class="small muted" style="margin:.3em 0 0">{{ _('noch {n} s', n=day.instruction.remaining_s) }}</p>
+        {% elif cur %}
+          <p style="margin:0;font-size:1.1em"><b>{{ cur.name }}</b>
+            {% if cur.text %}<span class="small muted">· {{ cur.text }}</span>{% endif %}</p>
+          {% if sess.program and sess.program.name %}
+            <p class="small muted" style="margin:.3em 0 0">{{ _('Programm') }}: {{ sess.program.name }}</p>
+          {% endif %}
+        {% elif day and day.block_label %}
+          <p style="margin:0;font-size:1.1em"><b>{{ day.block_label }}</b></p>
+        {% else %}
+          <p class="muted" style="margin:0">{{ _('Angemeldet, gerade läuft nichts.') }}</p>
+        {% endif %}
+
+        {% if day %}
+        <div class="kv small" style="margin-top:.8em">
+          <div>{{ _('Tag') }}</div>
+          <div>{{ day.plan or '–' }}
+               {% if day.remaining_min is defined %}<span class="muted">· {{ _('noch {n} min', n=day.remaining_min) }}</span>{% endif %}</div>
+          {% if day.next %}<div>{{ _('danach') }}</div><div>{{ day.next.label or day.next.kind }}</div>{% endif %}
+        </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# --- What comes next ------------------------------------------------ #}
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Folgende Aufgaben') }}</h2>
+  {% set offen = (lb.tasks_cur if lb else [])|selectattr('wt_status', 'equalto', 'open')|list %}
+  {% if offen %}
+    <table><tbody>
+    {% for t in offen %}<tr>
+      <td>{{ t.action_name or t.wt_action }}</td>
+      <td class="small muted">{% if t.wt_target %}{{ t.wt_target }}{% if t.target_unit %} {{ t.target_unit }}{% endif %}{% endif %}</td>
+      <td class="small muted">{% if t.wt_kind == 'detention' %}{{ _('Nachsitzen') }}{% elif t.wt_kind == 'challenge' %}{{ _('Herausforderung') }}{% endif %}</td>
+    </tr>{% endfor %}
+    </tbody></table>
+  {% else %}
+    <p class="muted" style="margin:0">{{ _('Nichts offen in dieser Woche.') }}</p>
+  {% endif %}
+</div>
+
+{# --- State of the devices -------------------------------------------- #}
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Stand der Geräte') }}</h2>
+  {% set zug = devices|selectattr('assigned')|list %}
+  {% if zug %}
+  <table><tbody>
+  {% for d in zug %}{% set o = online.get(d.dev_name) %}<tr>
+    <td><b>{{ d.dev_address or d.dev_name[:8] }}</b>
+        <span class="small muted">{{ d.model_name or d.dev_model }}</span></td>
+    <td>
+      {% if d.dev_blocked %}<span class="pill off" style="background:var(--bad)" title="{{ d.dev_blocked }}">{{ _('gesperrt') }}</span>
+      {% elif o and o.online %}<span class="pill on">{{ _('online') }}</span>
+      {% else %}<span class="pill off">{{ _('offline') }}</span>{% endif %}
+    </td>
+    <td class="small muted">
+      {% if d.dev_blocked %}{{ d.dev_blocked }}
+      {% elif o and o.online and o.state %}
+        {% if o.state.estim %}{{ _('Ausgabe') }}: {{ o.state.estim }}{% endif %}
+        {% if o.state.state and o.state.state != 'idle' %} · {{ o.state.state }}{% endif %}
+      {% endif %}
+    </td>
+  </tr>{% endfor %}
+  </tbody></table>
+  {% else %}
+  <p class="muted" style="margin:0">{{ _('Keine Geräte zugeordnet.') }}
+     <a href="#zuordnung" data-tab="zuordnung">{{ _('Zuordnen') }}</a></p>
+  {% endif %}
+</div>
+
+{# WHAT THE COLLAR SEES RIGHT NOW — back on the card (2026-09-15).
+   This panel stood on this page before the rework into index cards (doc 33)
+   and was lost in that rework: the import of `_collar.html` stayed at the top,
+   the call disappeared. It was not the supervisor who noticed but
+   `t_collar_state.sh` — its check for the panel on the participant page had
+   been red ever since and was read as a fault of the bench.
+   It belongs here and not on the device test page alone: whoever sees a
+   participant standing in a pose does not want to go by way of the device list
+   to find out whether she is still standing. #}
+{% for d in zug %}{% set o = online.get(d.dev_name) %}
+  {% if o and o.online and o.state and o.state.cond is defined %}
+    {{ coll.collar_panel(o.state, title=_('{dev}: was das Gerät gerade sieht')|replace('{dev}', d.dev_address or d.dev_name[:8])) }}
+  {% endif %}
+{% endfor %}
+</section>
+
+{# ------------------------------------------------------------------ #}
+<section class="tabpane" data-pane="zuordnung">
+<form method="post" action="{{ url_for('slave_assign', sid=row.slave_id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}">
+<div class="grid">
+  <div class="panel"><h2 style="margin-top:0">{{ _('Programme') }}</h2>
+    <p class="small muted">{{ _('Zugeordnet = darf gewählt werden. Genau eines ist aktiv und startet bei der Anmeldung.') }}</p>
+    <table><thead><tr><th>{{ _('zugeordnet') }}</th><th>{{ _('aktiv') }}</th><th>{{ _('Programm') }}</th></tr></thead><tbody>
+    {% for p in programs %}<tr>
+      <td><input type="checkbox" name="program" value="{{ p.pro_id }}" {{ 'checked' if p.assigned }}></td>
+      <td><input type="radio" name="active" value="{{ p.pro_id }}" {{ 'checked' if row.slave_program==p.pro_id }}></td>
+      <td><a href="{{ url_for('program_detail', pid=p.pro_id) }}">{{ p.pro_name }}</a><br><span class="small muted">{{ p.pro_functions }}</span></td>
+    </tr>{% else %}<tr><td colspan="3" class="muted">{{ _('Keine Programme vorhanden') }} — <a href="{{ url_for('program_edit') }}">{{ _('anlegen') }}</a>.</td></tr>{% endfor %}
+    <tr><td></td><td><input type="radio" name="active" value="" {{ 'checked' if not row.slave_program }}></td><td class="muted">{{ _('kein aktives Programm') }}</td></tr>
+    </tbody></table></div>
+  <div class="panel"><h2 style="margin-top:0">{{ _('Geräte') }}</h2>
+    <p class="small muted">{{ _('Diese Geräte bekommen bei der Anmeldung den Sklaven zugewiesen. Kalibriert wird auf der Karte Kalibrierung.') }}</p>
+    <table><thead><tr><th></th><th>{{ _('Gerät') }}</th><th>{{ _('Modell') }}</th><th>{{ _('Status') }}</th></tr></thead><tbody>
+    {% for d in devices %}{% set o = online.get(d.dev_name) %}<tr>
+      <td><input type="checkbox" name="device" value="{{ d.dev_id }}" {{ 'checked' if d.assigned }}></td>
+      <td><b>{{ d.dev_address or d.dev_name[:8] }}</b><br><span class="mono small muted">{{ d.dev_name }}</span>{% if d.others %}<br><span class="small" style="color:var(--warn)">{{ _('auch bei {who} — bei gleichzeitiger Anmeldung behält es, wer zuerst da ist', who=d.others) }}</span>{% endif %}</td>
+      <td>{{ d.dev_model }}</td>
+      <td>{% if o and o.online %}<span class="pill on">{{ _('online') }}</span>{% else %}<span class="pill off">{{ _('offline') }}</span>{% endif %}
+        {# Short state of the calibration: here only for READING, it gets set on
+           its own card. Otherwise a form would stand inside a form — and that
+           is exactly what once saved the device assignment instead of the
+           calibration (doc 30 §7). #}
+        {% if d.needs_cal or d.needs_depth or d.needs_estim %}<br>
+          {# Collect first, join afterwards. A separator appended to every
+             piece ends up standing alone — exactly what stood here before. #}
+          {% set parts = [
+               ('E-Stim ' ~ (_('kalibriert') if d.estim else _('fehlt')), not d.estim) if d.needs_estim else none,
+               (_('Tiefe') ~ ': ' ~ (_('ja') if d.depth else _('nein')), false) if d.needs_depth else none,
+               (_('Haltung') ~ ': ' ~ d.cal_poses|length ~ '/2', false) if d.needs_cal else none
+             ]|select|list %}
+          <span class="small muted">{% for text, bad in parts %}{% if not loop.first %} · {% endif %}{%
+            if bad %}<span style="color:var(--err)">{{ text }}</span>{% else %}{{ text }}{% endif %}{% endfor %}</span>{% endif %}</td>
+    </tr>{% else %}<tr><td colspan="4" class="muted">{{ _('Keine Geräte angelegt') }} — <a href="{{ url_for('devices') }}">{{ _('Geräte') }}</a>.</td></tr>{% endfor %}
+    </tbody></table></div>
+</div>
+<p><button class="primary">{{ _('Zuordnungen speichern') }}</button> <span class="small muted">{{ _('Die Zentrale übernimmt Änderungen sofort — auch bei angemeldetem Sklaven (laufendes Programm behält seine Position).') }}</span></p>
+</form>
+</section>
+
+{# ------------------------------------------------------------------ #}
+<section class="tabpane" data-pane="kalibrierung">
+<div class="panel">
+  <h2 style="margin-top:0">{{ _('Kalibrierdurchgang') }}</h2>
+  <p class="small muted" style="margin-top:0">{{ _('Kalibrieren geht nur angemeldet — sonst sind ihr die Geräte nicht zugewiesen. Eine normale Anmeldung öffnet aber ihren Tag, und vorzeitiges Abmelden gilt als Kapitulation. Dieser Schalter macht die NÄCHSTE Anmeldung zu einem reinen Kalibrierdurchgang: kein Programm, kein Tagesplan, keine Routine, keine Punkte. Mit dem Abmelden ist er zu Ende und sie kann sich ganz normal anmelden — ihr Tag ist unberührt.') }}</p>
+  <form method="post" action="{{ url_for('calibration_mode', sid=row.slave_id) }}" class="row" style="align-items:center"><input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div style="flex:0 0 auto">
+      {% if calmode and calmode.running %}<span class="pill act">{{ _('läuft gerade') }}</span>
+      {% elif calmode and calmode.armed %}<span class="pill act">{{ _('scharf gestellt') }}</span>
+      {% else %}<span class="pill off">{{ _('aus') }}</span>{% endif %}
+    </div>
+    <div style="flex:0 0 auto">
+      {% if calmode and calmode.armed %}<button class="sm">{{ _('Abschalten') }}</button>
+      {% else %}<button name="on" value="1" class="sm primary"
+        onclick="return confirm('{{ _('Die nächste Anmeldung wird ein reiner Kalibrierdurchgang. Fortfahren?') }}')">{{ _('Für die nächste Anmeldung scharf stellen') }}</button>{% endif %}
+    </div>
+  </form>
+  <p class="small muted" style="margin-bottom:0">{{ _('Von Hand bestrafen und belohnen geht im Durchgang weiter (Karte „Rang, Auflagen, Kanal"), und alles wird protokolliert — nur gewertet wird nichts.') }}</p>
+</div>
+
+{% for d in devices %}{% set o = online.get(d.dev_name) %}
+{% if d.needs_cal or d.needs_depth or d.needs_estim %}
+<div class="panel">
+  <h2 style="margin-top:0;font-size:16px">{{ d.dev_address or d.dev_name[:8] }}
+    <span class="small muted mono">{{ d.dev_model }}</span>
+    {% if o and o.online %}<span class="pill on">{{ _('online') }}</span>{% else %}<span class="pill off">{{ _('offline') }}</span>{% endif %}
+    {% if not d.assigned %}<span class="pill" title="{{ _('Dieses Gerät ist ihr nicht zugeordnet — kalibrieren lässt es sich trotzdem.') }}">{{ _('nicht zugeordnet') }}</span>{% endif %}</h2>
+
+  {% if d.needs_cal %}
+  <div class="calrow">
+    {% if d.cal_poses|length == 2 %}<span class="pill on" title="{{ _('Winkel zwischen den Haltungen') }}">{{ _('Haltung kalibriert') }} · {{ d.cal_sep }}°</span>
+    {% elif d.cal_poses %}<span class="pill act">{{ _('nur') }} {{ d.cal_poses|join(', ') }}</span>
+    {% else %}<span class="pill act">{{ _('Haltung nicht kalibriert') }}</span>{% endif %}
+    <a class="btn sm" href="{{ url_for('calibrate', sid=row.slave_id, device=d.dev_name) }}">{{ _('Kalibrieren') }}</a>
+  </div>{% endif %}
+
+  {% if d.needs_depth %}
+  <div class="calrow">
+    {% if d.depth %}<span class="pill on" title="{{ _('Ruhe / größte Tiefe') }}">{{ _('Tiefe') }} {{ d.depth.sc_x|int }} → {{ d.depth.sc_y|int }} mm</span>
+    {% else %}<span class="pill act">{{ _('Tiefe nicht kalibriert') }}</span>{% endif %}
+    <button form="cal-depth-{{ d.dev_id }}" class="sm" {{ 'disabled' if not (o and o.online) }}
+      onclick="return confirm('{{ _('15 s messen: Sklaven so tief wie möglich. Jetzt starten?') }}')">{{ _('Tiefe messen') }}</button>
+    {% if d.depth %}<button form="cal-depth-{{ d.dev_id }}" class="sm danger" name="delete" value="1"
+      title="{{ _('Tiefenkalibrierung löschen') }}"
+      onclick="return confirm('{{ _('Tiefenkalibrierung löschen?') }}')">×</button>{% endif %}
+  </div>{% endif %}
+
+  {# E-Stim: the pulse height per channel. No sensor measures that — the
+     supervisor ramps up with the raw output, the wearer says where it stops,
+     and the result stands here (doc 28 §5). Without this value the bridge
+     emits nothing at all for her. #}
+  {% if d.needs_estim %}
+  <h3 style="font-size:14px;margin:14px 0 4px">{{ _('E-Stim: Decke') }}</h3>
+  <div class="calrow">
+    {% if d.estim %}<span class="pill on" title="{{ _('Höchste Impulshöhe je Kanal') }}">A {{ d.estim.sc_x|int }} % · B {{ d.estim.sc_y|int }} %</span>
+    {% else %}<span class="pill act" style="color:var(--err)">{{ _('nicht kalibriert — gibt nichts aus') }}</span>{% endif %}
+  </div>
+  <div class="calrow">
+    <span class="nowrap">A <input form="cal-estim-{{ d.dev_id }}" type="number" name="a" min="0" max="100"
+      value="{{ d.estim.sc_x|int if d.estim else 20 }}" class="pct"> %</span>
+    <span class="nowrap">B <input form="cal-estim-{{ d.dev_id }}" type="number" name="b" min="0" max="100"
+      value="{{ d.estim.sc_y|int if d.estim else 20 }}" class="pct"> %</span>
+    <button form="cal-estim-{{ d.dev_id }}" class="sm primary">{{ _('Stärke setzen') }}</button>
+    {# The delete button stands set apart: it takes away every output for the
+       slave on this device, and that must not be a stray neighbouring click. #}
+    {% if d.estim %}<button form="cal-estim-{{ d.dev_id }}" class="sm danger del" name="delete" value="1"
+      title="{{ _('E-Stim-Kalibrierung löschen — das Gerät gibt für sie dann nichts mehr aus') }}"
+      onclick="return confirm('{{ _('E-Stim-Kalibrierung löschen? Das Gerät gibt für sie danach nichts mehr aus.') }}')">×</button>{% endif %}
+  </div>
+  <div class="small muted" style="margin-top:2px">{{ _('Vorher mit der Rohausgabe herantasten — die Zahl ist eine Empfindung, kein Messwert.') }}
+    <a href="{{ url_for('device_test', uuid=d.dev_name) }}">{{ _('Rohausgabe') }}</a></div>
+
+  {# Pulse levels: how much OF HER CEILING a punishment resp. reward of
+     level 1/2/3 uses (doc 31), plus the profile and the test button (doc 32). #}
+  <h3 style="font-size:14px;margin:14px 0 4px">{{ _('E-Stim: Impulsstufen und Profil') }}</h3>
+  {% for w, lab, rk, cur, dflt in [('punish', _('Bestrafung'), 'bestrafung', d.estim_pun, 'stich'),
+                                   ('reward', _('Belohnung'), 'belohnung', d.estim_rew, 'zweitakt')] %}
+  {% set f = 'lvl-' ~ w ~ '-' ~ d.dev_id %}
+  {% set sel = (cur.sc_profile if cur and cur.sc_profile else dflt) %}
+  <div class="calrow">
+    <span class="callabel">{{ lab }}</span>
+    {# The three levels and their profile belong in ONE form: the test button
+       saves first and only then fires, so that no value ever runs which
+       nobody has felt (doc 32 §5). #}
+    {% for n, key in [(1,'sc_x'), (2,'sc_y'), (3,'sc_z')] %}
+    <span class="nowrap">{{ n }} <input form="{{ f }}" type="number" name="l{{ n }}"
+      min="1" max="100" value="{{ cur[key]|int if cur else (25 if n==1 else (45 if n==2 else 70)) }}" class="pct"> %<button
+      form="{{ f }}" class="sm try" name="try" value="{{ n }}" {{ 'disabled' if not (o and o.online) }}
+      title="{{ _('Speichern und Stufe {n} einmal ausgeben — 2 s, wird nicht gebucht', n=n) }}"
+      onclick="return confirm('{{ _('Stufe {n} jetzt wirklich ausgeben? Die Elektroden müssen sitzen.', n=n) }}')">▶</button></span>
+    {% endfor %}
+    <span class="nowrap"><select form="{{ f }}" name="profile" class="prof">
+      {% for p in profile_list %}<option value="{{ p.key }}" {{ 'selected' if p.key == sel }}
+        title="{{ p.desc }}">{{ p.name }} · {{ p.hz }}{% if p.role_key != rk %} ({{ p.role }}){% endif %}</option>{% endfor %}
+    </select></span>
+    <button form="{{ f }}" class="sm">{{ _('Setzen') }}</button>
+    {% if cur %}<button form="{{ f }}" class="sm danger del" name="delete" value="1"
+      title="{{ _('auf 25/45/70 und das Vorgabeprofil zurücksetzen') }}"
+      onclick="return confirm('{{ _('Stufen und Profil zurücksetzen?') }}')">×</button>
+    {% else %}<span class="small muted">{{ _('Vorgabe') }}</span>{% endif %}
+  </div>
+  {% if prof_clash and prof_clash[w] %}<div class="small" style="color:var(--warn)">{{
+    _('Ihre Bridges tragen hier verschiedene Profile ein — dann benutzt die Zentrale die Vorgabe {p}, '
+      'also an keinem Gerät das eingetragene. Bitte angleichen.', p=dflt) }}</div>{% endif %}
+  {% endfor %}
+  <div class="small muted">{{ _('Prozent ihrer Decke, nicht der Geräteleistung. Bestrafung läuft auf Kanal A, '
+    'Belohnung auf B. Das Profil bestimmt die Wellenform, nicht die Höhe — am Po trägt eine andere als an der '
+    'Scham. ▶ gibt die Stufe einmal aus; das zählt auf den Tagesvorrat, wird aber nicht gebucht.') }}</div>
+  {% endif %}
+</div>
+{% endif %}{% endfor %}
+</section>
+
+{# The calibration forms stand HERE, outside every other form, and their fields
+   above point at them via form="...".
+   REASON: nested <form> does not exist in HTML. The browser silently throws the
+   inner one away, and its button then submits the OUTER one.
+   Exactly that happened: "Staerke setzen" saved the device assignment
+   and never reached the calibration (finding by Philine 2026-09-11).
+   The depth calibration had the same fault for as long as it had existed. #}
+{% for d in devices %}
+  {% if d.needs_depth %}<form id="cal-depth-{{ d.dev_id }}" method="post" action="{{ url_for('calibrate_depth', sid=row.slave_id, device=d.dev_name) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="seconds" value="15"></form>{% endif %}
+  {% if d.needs_estim %}<form id="cal-estim-{{ d.dev_id }}" method="post" action="{{ url_for('calibrate_estim', sid=row.slave_id, device=d.dev_name) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"></form>
+  <form id="lvl-punish-{{ d.dev_id }}" method="post" action="{{ url_for('estim_levels', sid=row.slave_id, device=d.dev_name) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="what" value="punish"></form>
+  <form id="lvl-reward-{{ d.dev_id }}" method="post" action="{{ url_for('estim_levels', sid=row.slave_id, device=d.dev_name) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="what" value="reward"></form>{% endif %}
+{% endfor %}
+
+{# ------------------------------------------------------------------ #}
+{% if lb %}{% set S = lb.summary %}
+{% if day_enabled %}
+<section class="tabpane" data-pane="tag">
+<div class="panel"><h2 style="margin-top:0">{{ _('Tagesablauf') }}
+  {% if lb.day and lb.day.ds_status == 'running' %}<span class="pill act">{{ _('läuft — Block') }} {{ lb.day.ds_pos }}: {{ BLOCK_KINDS.get(lb.day.ds_block_kind, (lb.day.ds_block_kind or '–',))[0] }}</span>
+  {% elif lb.day %}<span class="pill {{ 'off' if lb.day.ds_status in ('capitulated','aborted') else 'on' }}">{{ {'done':'Tag beendet','capitulated':'kapituliert','aborted':'abgebrochen'}.get(lb.day.ds_status, lb.day.ds_status) }} · {{ lb.day.ds_day }}</span>{% endif %}</h2>
+  <p class="small muted" style="margin-top:0">{{ _('Der Sklave meldet sich') }} <b>{{ _('einmal am Tag') }}</b> {{ _('an; danach führt die Zentrale ihn durch den Tag. Die') }} <b>{{ _('Tagesdauer') }}</b> {{ _('ist der Hebel für Regeln: eine Belohnung kürzt sie, eine Bestrafung verlängert sie — mindestens 15 min, höchstens {n} min aus', n=limits.day_minutes_max) }}
+  <span class="mono">config.ini [safety]</span>{{ _('. Vorzeitiges Abmelden gilt als') }} <b>{{ _('Kapitulation') }}</b>{{ _('; eine erneute Anmeldung am selben Tag geht nur, wenn sie hier erlaubt ist.') }} <b>{{ _('Ein Kalibrierdurchgang zählt nicht als Anmeldung') }}</b> {{ _('— er öffnet keinen Tag (Karte Kalibrierung).') }}</p>
+  {% if lb.day %}<div class="kv">
+    <div>{{ _('Tag') }}</div><div>{{ lb.day.ds_day }}{% if lb.day.dp_name %} · {{ _('Vorlage') }} {{ lb.day.dp_name }}{% endif %}</div>
+    <div>{{ _('Beginn / geplantes Ende') }}</div><div>{{ lb.day.ds_started|ts }} → {{ lb.day.ds_planned_end|ts }}{% if lb.day.ds_ended %} · {{ _('beendet') }} {{ lb.day.ds_ended|ts }}{% endif %}</div>
+    <div>{{ _('Aktueller Block') }}</div><div>{{ BLOCK_KINDS.get(lb.day.ds_block_kind, (lb.day.ds_block_kind or '–',))[0] }}{% if lb.day.ds_block_text %} — „{{ lb.day.ds_block_text }}“{% endif %}{% if lb.day.ds_block_end %} {{ _('bis') }} {{ lb.day.ds_block_end|ts }}{% endif %}</div>
+    <div>{{ _('Heute') }}</div><div>{{ lb.day.ds_tasks }} {{ _('Planaufgabe(n)') }} · {{ (lb.day.ds_train_s // 60) }} {{ _('min seit der letzten Pause') }} · {{ (lb.day.ds_free_s // 60) }} {{ _('min freies Training') }}</div>
+  </div>{% else %}<p class="muted">{{ _('Für diesen Sklave ist noch kein Tag verzeichnet.') }}</p>{% endif %}
+  <form method="post" action="{{ url_for('lb.slave_settings', sid=row.slave_id) }}" class="row" style="align-items:flex-end;margin-top:8px"><input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div><label>{{ _('Tagesplan') }}</label><select name="day_plan"><option value="">{{ _('– Vorgabe –') }}</option>
+      {% for p in lb.day_plans %}<option value="{{ p.dp_id }}" {{ 'selected' if lb.settings and lb.settings.ss_day_plan==p.dp_id }}>{{ p.dp_name }}{{ ' (' + _('Vorgabe') + ')' if p.dp_default }}</option>{% endfor %}</select></div>
+    <div style="flex:0 0 160px"><label>{{ _('Tagesdauer (min)') }}</label><input type="number" name="day_minutes" min="15" max="{{ limits.day_minutes_max }}" value="{{ lb.day_minutes }}"></div>
+    <div style="flex:0 0 auto"><label>&nbsp;</label><label style="display:inline"><input type="checkbox" name="relogin" value="1" {{ 'checked' if lb.settings and lb.settings.ss_relogin }}> {{ _('Wiederanmeldung nach Kapitulation erlaubt') }}</label></div>
+    <div style="flex:0 0 auto"><button>{{ _('Speichern') }}</button></div>
+    <div style="flex:0 0 auto"><label>&nbsp;</label><a class="btn sm" href="{{ url_for('lb.dayplans_view') }}">{{ _('Tagespläne') }}</a></div>
+  </form>
+</div>
+</section>
+{% endif %}
+
+{# ------------------------------------------------------------------ #}
+<section class="tabpane" data-pane="rang">
+  <div class="panel"><h2 style="margin-top:0">{{ _('Rang und Punkte') }}</h2>
+    <p><span class="rankbadge" style="font-size:16px">{{ _('Rang') }} {{ S.rank }} · {{ S.rank_name }}</span>{% if S.frozen %} <span class="pill act">{{ _('eingefroren') }}</span>{% endif %}{% if S.pause %} <span class="pill warn">{{ _('Pause bis') }} {{ S.pause.text }}</span>{% endif %}{% if S.dayform and S.dayform.form != 'normal' %} <span class="pill {{ 'warn' if S.dayform.form == 'strict' else 'act' }}">{{ _('Tagesform') }}: {{ DAYFORMS[S.dayform.form] }}</span>{% endif %}{% if S.scenario %} <span class="pill act">{{ _('Szenario') }}: {{ S.scenario.name }}</span>{% endif %}</p>
+    <div class="kv">
+      <div>{{ _('Wochenpunkte (Score)') }}</div><div><b>{{ S.score_week }}</b>{% if S.place_week %} · {{ _('Platz') }} {{ S.place_week }} {{ _('von') }} {{ S.participants }}{% endif %}</div>
+      <div>{{ _('Gesamtpunkte') }}</div><div><b>{{ S.points_total }}</b>{% if S.place_total %} · {{ _('Platz') }} {{ S.place_total }}{% endif %}</div>
+      <div>{{ _('Letzter Durchgang') }}</div><div>{% if S.last %}{{ S.last.action|action_name }}: <span class="gradecell">{{ S.last.grade|grade_icon }}{{ S.last.grade }}</span> {{ S.last.points }} P{% if S.last.best %} ★{% endif %}{% else %}–{% endif %}</div>
+    </div>
+    <div class="forecast {{ S.forecast.risk }}">{{ S.forecast.text }} <span class="small muted">({{ _('Aufgaben ≥ Mindestnote') }}: {{ S.forecast.tasks_up }}, {{ _('Wochenbester') }}: {{ S.forecast.best_count }}×, {{ _('Strafen') }}: {{ S.forecast.punish }})</span></div>
+    <form method="post" action="{{ url_for('lb.slave_rank', sid=row.slave_id) }}" class="row" style="align-items:flex-end"><input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div><label>{{ _('Rang setzen') }}</label><select name="rank">{% for r in lb.rank_rows %}<option value="{{ r.rank_no }}" {{ 'selected' if r.rank_no==S.rank }}>{{ r.rank_no }} · {{ r.name }}</option>{% endfor %}</select></div>
+      <div style="flex:0 0 auto"><label>&nbsp;</label><label style="display:inline"><input type="checkbox" name="frozen" value="1" {{ 'checked' if S.frozen }}> {{ _('einfrieren (keine Wochenbewertung)') }}</label></div>
+      <div style="flex:0 0 auto"><button>{{ _('Speichern') }}</button></div></form>
+    <p style="margin-bottom:4px">{{ _('Abzeichen') }}: {% for b in S.badges %}<span class="badge" title="{{ BADGES[b.key][1] if b.key in BADGES }}">{{ b.name }}</span>{% else %}<span class="muted small">{{ _('noch keine') }}</span>{% endfor %}</p>
+    <p style="margin-bottom:4px">{{ _('Privilegien') }}: {% for pv in S.privileges %}<span class="priv" title="{{ PRIVILEGES[pv.key][1] if pv.key in PRIVILEGES }}">{{ pv.name }}</span>
+      <form method="post" action="{{ url_for('lb.slave_privilege', sid=row.slave_id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ pv.key }}"><button name="op" value="revoke" class="sm">{{ _('entziehen') }}</button></form>
+      {% else %}<span class="muted small">{{ _('keine') }}</span>{% endfor %}</p>
+    <form method="post" action="{{ url_for('lb.slave_privilege', sid=row.slave_id) }}" class="row" style="align-items:flex-end"><input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div><label>{{ _('Privileg erteilen') }}</label><select name="key">{% for k, v in PRIVILEGES.items() %}<option value="{{ k }}">{{ v[0] }} — {{ v[1] }}</option>{% endfor %}</select></div>
+      <div style="flex:0 0 auto"><button name="op" value="grant">{{ _('Erteilen') }}</button></div></form>
+    {# Requirements: the counterpart to the privileges (doc 26). A privilege is
+       earned and makes things easier, a requirement is imposed and tightens
+       them. That is why they stand side by side and not in one list. #}
+    <p style="margin:12px 0 4px">{{ _('Auflagen') }}: {% for sa in S.sanctions %}<span class="pill warn" title="{{ SANCTIONS[sa.key][1] if sa.key in SANCTIONS }}">{{ sa.name }}</span>
+      <span class="small muted">{% if sa.until %}{{ _('bis') }} {{ sa.until[11:16] }}{% endif %}{% if sa.until_day %} · {{ _('bis Tagesende') }}{% endif %}{% if sa.runs_left %} · {{ _('noch {n} Durchgänge', n=sa.runs_left) }}{% endif %}{% if not sa.until and not sa.until_day and not sa.runs_left %} · <b>{{ _('ohne Ende') }}</b>{% endif %}{% if sa.reason %} · {{ sa.reason }}{% endif %}</span>
+      <form method="post" action="{{ url_for('lb.slave_sanction', sid=row.slave_id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ sa.key }}"><button name="op" value="lift" class="sm">{{ _('aufheben') }}</button></form>
+      {% else %}<span class="muted small">{{ _('keine') }}</span>{% endfor %}</p>
+    <form method="post" action="{{ url_for('lb.slave_sanction', sid=row.slave_id) }}" class="row" style="align-items:flex-end"><input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div><label>{{ _('Auflage verhängen') }}</label><select name="key">{% for k, v in SANCTIONS.items() %}<option value="{{ k }}">{{ v[0] }} — {{ v[1] }}</option>{% endfor %}</select></div>
+      <div style="max-width:7em"><label>{{ _('Stunden') }}</label><input name="hours" type="number" step="0.5" min="0" placeholder="2"></div>
+      <div style="max-width:8em"><label>{{ _('Durchgänge') }}</label><input name="runs" type="number" min="0" placeholder="3"></div>
+      <div style="flex:0 0 auto"><label>&nbsp;</label><label style="display:inline"><input type="checkbox" name="until_day" value="1"> {{ _('bis Tagesende') }}</label></div>
+      <div><label>{{ _('Grund') }}</label><input name="reason" maxlength="160" placeholder="{{ _('steht im Protokoll und auf ihrer Seite') }}"></div>
+      <div style="flex:0 0 auto"><button name="op" value="impose" class="danger"
+        onclick="return confirm('{{ _('Auflage verhängen? Sie wirkt sofort und bis zum Ende.') }}')">{{ _('Verhängen') }}</button></div></form>
+    <p class="small muted">{{ _('Was zuerst eintritt, beendet die Auflage. Ohne jede Angabe läuft sie, bis jemand sie aufhebt — das ist erlaubt, wird aber gern vergessen.') }}</p>
+
+    {# Scenario (doc 44 §7): the bundle with a name - what runs, until when, or
+       the form to put one on. One at a time. #}
+    {% if scenarios_enabled %}<h3 style="font-size:14px;margin:14px 0 6px">{{ _('Szenario') }}</h3>
+    {% if S.scenario %}
+    <p style="margin:0 0 8px"><span class="pill act"><b>{{ S.scenario.name }}</b> · {{ _('bis') }} {{ S.scenario.until[8:10] }}.{{ S.scenario.until[5:7] }}.{{ S.scenario.until[:4] }}</span> <span class="small muted">{{ _('aktiviert von') }} <span class="mono">{{ S.scenario.by }}</span></span>
+      <form method="post" action="{{ url_for('lb.slave_scenario', sid=row.slave_id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><button name="op" value="end" class="sm" onclick="return confirm('{{ _('Szenario beenden? Plan, Auflagen, Budgets und Tagesform gehen zurück.') }}')">{{ _('beenden') }}</button></form>
+      <a href="{{ url_for('lb.scenarios_view') }}" class="small">{{ _('Szenarien') }}</a></p>
+    {% else %}
+    <form method="post" action="{{ url_for('lb.slave_scenario', sid=row.slave_id) }}" class="row" style="align-items:flex-end"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="activate">
+      <div><label>{{ _('Szenario') }}</label><select name="scenario">{% for sc in scenario_list() %}<option value="{{ sc.sn_id }}">{{ sc.sn_name }}</option>{% else %}<option value="">{{ _('keines angelegt') }}</option>{% endfor %}</select></div>
+      <div style="max-width:11em"><label>{{ _('Bis (einschließlich)') }}</label><input type="date" name="until" value="{{ today_iso }}" required></div>
+      <div style="flex:0 0 auto"><button>{{ _('Aktivieren') }}</button></div>
+      <div><a href="{{ url_for('lb.scenarios_view') }}" class="small">{{ _('Szenarien verwalten') }}</a></div></form>
+    {% endif %}{% endif %}
+
+    {# Day form (doc 44 §5): one modifier over the day. Today's row and, when a
+       rule or the supervisor wrote one, tomorrow's. Normal is the absence of a row. #}
+    {% if dayform_enabled and S.dayform %}<h3 style="font-size:14px;margin:14px 0 6px">{{ _('Tagesform') }}</h3>
+    <p style="margin:0 0 6px"><span class="pill {{ 'warn' if S.dayform.form == 'strict' else ('act' if S.dayform.form == 'easy' else '') }}" title="{{ DAYFORM_HELP[S.dayform.form] }}">{{ _('heute') }}: <b>{{ DAYFORMS[S.dayform.form] }}</b></span>
+      {% if S.dayform.form != 'normal' %}<span class="small muted">{% if S.dayform.by %}{{ _('gesetzt von') }} <span class="mono">{{ S.dayform.by }}</span>{% endif %}{% if S.dayform.reason %} · {{ S.dayform.reason }}{% endif %}{% if S.dayform.all %} · {{ _('(ganze Anlage)') }}{% endif %} · {{ _('Impulse') }} {{ S.dayform.pulse_pct }} % · {{ _('Stufe') }} {{ '%+d' % S.dayform.level_offset }}</span>{% endif %}
+      {% if S.dayform.tomorrow %}<span class="pill" title="{{ DAYFORM_HELP[S.dayform.tomorrow] }}">{{ _('morgen') }}: {{ DAYFORMS[S.dayform.tomorrow] }}</span>{% endif %}</p>
+    <form method="post" action="{{ url_for('lb.slave_dayform', sid=row.slave_id) }}" class="row" style="align-items:flex-end"><input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div><label>{{ _('Tagesform') }}</label><select name="form">{% for k in ('easy','normal','strict') %}<option value="{{ k }}" {{ 'selected' if k == S.dayform.form }}>{{ DAYFORMS[k] }} — {{ DAYFORM_HELP[k] }}</option>{% endfor %}</select></div>
+      <div style="flex:0 0 auto"><label>&nbsp;</label><label style="display:inline"><input type="checkbox" name="tomorrow" value="1"> {{ _('für morgen') }}</label></div>
+      <div><label>{{ _('Grund') }}</label><input name="reason" maxlength="160" placeholder="{{ _('steht im Protokoll') }}"></div>
+      <div style="flex:0 0 auto"><button>{{ _('Setzen') }}</button></div></form>
+    <p class="small muted">{{ _('Gilt bis Tagesende und fällt dann auf normal — es sei denn, eine Regel setzt sie wieder. Impulse nie über der Decke, Stufe nur innerhalb ihrer Grenzen; Bestrafungsbudgets bleiben unberührt.') }}</p>{% endif %}
+
+    {# Streaks (doc 44 §3): count, record, next milestone - and the loss in red
+       for a day. The screen shows the same. #}
+    {% if S.streaks %}<h3 style="font-size:14px;margin:14px 0 6px">{{ _('Serien') }}</h3>
+    <p style="margin:0 0 8px">{% for x in S.streaks %}
+      {% if x.broken_recent and not x.count %}<span class="pill warn" title="{{ x.broken_at }}">{{ _('Serie gebrochen') }}: {{ x.name }} — {{ x.broken_count }} {{ _(x.unit) }}</span>
+      {% else %}<span class="pill {{ 'act' if x.count else '' }}" title="{{ _('Rekord') }} {{ x.best }}{% if x.next %} · {{ _('nächster Meilenstein') }} {{ x.next }}{% endif %}">{{ x.name }}: {{ x.count }} {{ _(x.unit) }}{% if x.next %} <span class="muted">→ {{ x.next }}</span>{% endif %}</span>{% endif %}
+    {% endfor %} <a href="{{ url_for('lb.streaks_view') }}" class="small">{{ _('bearbeiten') }}</a></p>{% endif %}
+
+    {# Pause / holiday (doc 44 §2): one line when it runs, a short form when not.
+       Deliberately next to the sanctions and not in a tab of its own — the
+       supervisor who enters a holiday is standing on this card anyway. #}
+    <h3 style="font-size:14px;margin:14px 0 6px">{{ _('Pause') }}</h3>
+    {% if S.pause %}
+    <p style="margin:0 0 8px"><span class="pill warn">{{ _('Pause bis') }} {{ S.pause.text }}</span>{% if S.pause.all %} <span class="small muted">{{ _('(ganze Anlage)') }}</span>{% endif %}
+      <form method="post" action="{{ url_for('lb.pauses_view') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="pa_id" value="{{ S.pause.id }}"><input type="hidden" name="back" value="{{ url_for('slave_detail', sid=row.slave_id) }}#rang"><button name="op" value="delete" class="sm" onclick="return confirm('{{ _('Pause beenden? Ab sofort gilt wieder alles.') }}')">{{ _('beenden') }}</button></form>
+      <span class="small muted">{{ _('Keine Anmeldung öffnet einen Tag, keine Regel feuert, der Kanal schweigt. Die Woche steht.') }}</span></p>
+    {% else %}
+    <form method="post" action="{{ url_for('lb.pauses_view') }}" class="row" style="align-items:flex-end"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add"><input type="hidden" name="slave" value="{{ row.slave_id }}"><input type="hidden" name="back" value="{{ url_for('slave_detail', sid=row.slave_id) }}#rang">
+      <div style="max-width:11em"><label>{{ _('Von') }}</label><input type="date" name="from" value="{{ today_iso }}" required></div>
+      <div style="max-width:11em"><label>{{ _('Bis (einschließlich)') }}</label><input type="date" name="to" value="{{ today_iso }}" required></div>
+      <div><label>{{ _('Grund') }}</label><input name="reason" maxlength="160" placeholder="{{ _('Urlaub') }}"></div>
+      <div style="flex:0 0 auto"><button>{{ _('Pause eintragen') }}</button></div></form>
+    {% endif %}
+
+    <h3 style="font-size:14px;margin:14px 0 6px">{{ _('Kanal') }}</h3>
+    {# Budgets (doc 44 §1): used/max for every budget with a count. The [safety]
+       ceiling is one of them and always shows — it is the line the supervisor
+       is looking for when a punishment "did not arrive". #}
+    <p class="small" style="margin:0 0 8px">{{ _('Budgets') }}:
+      {% for b in S.budgets %}<span class="pill {{ 'warn' if b.used >= b.max else 'act' }}" title="{{ b.source }}{% if b.gap %} · {{ _('Abstand') }} {{ b.gap }} s ({{ b.on_gap }}){% endif %}">{{ _('Bestrafungen') if b.key=='punish' else _('Belohnungen') }} {{ b.used }}/{{ b.max }} {{ _('heute') if b.period=='day' else _('diese Woche') }}</span> {% else %}<span class="muted">{{ _('keine Zählgrenze') }}</span>{% endfor %}
+      <a href="{{ url_for('lb.budgets_view') }}" class="small">{{ _('bearbeiten') }}</a></p>
+    <form method="post" action="{{ url_for('lb.slave_channel', sid=row.slave_id) }}" class="row" style="align-items:flex-end"><input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div><label>{{ _('Stufe') }}</label><select name="level"><option value="1">{{ _('1 leicht') }}</option><option value="2">{{ _('2 mittel') }}</option><option value="3">{{ _('3 stark') }}</option></select></div>
+      <div><label>{{ _('Art') }}</label><select name="kind"><option value="any">{{ _('alle Reizgeber') }}</option><option value="shock">{{ _('shock') }}</option><option value="vibe">{{ _('vibe') }}</option><option value="beep">{{ _('beep') }}</option></select></div>
+      <div><label>{{ _('Grund') }}</label><input name="reason" value="aufsicht" maxlength="24"></div>
+      <div style="flex:0 0 auto"><button name="what" value="punish" class="danger" onclick="return confirm('Bestrafung über den Kanal an alle Reizgeber des Sklaven?')">{{ _('Bestrafen') }}</button> <button name="what" value="reward">{{ _('Belohnen') }}</button></div></form>
+    <p class="small muted">{{ _('Nur wirksam, wenn der Sklave angemeldet ist (dann horchen seine Reizgeber). Zählt für den laufenden Durchgang; Mindestpause und Tageslimit des Kanals gelten. Im Kalibrierdurchgang geht das weiter — dort gibt es nur keinen Durchgang, für den es zählt.') }}</p>
+  </div>
+</section>
+
+{# ------------------------------------------------------------------ #}
+<section class="tabpane" data-pane="wochenplan">
+<div class="grid">
+  <div class="panel"><h2 style="margin-top:0">{{ _('Wochenplan') }}</h2>
+    {% for label, week, tasks in ((_('aktuelle Woche') ~ ' ' ~ cur_week, cur_week, lb.tasks_cur), (_('nächste Woche') ~ ' ' ~ next_week, next_week, lb.tasks_next)) %}
+    <h3 style="font-size:14px;margin:10px 0 4px">{{ label }}</h3>
+    <table><tbody>{% for t in tasks %}<tr>
+      <td>{{ t.wt_action|action_name }} <span class="muted">{{ t.wt_target|target_text(t.unit) }}</span>{% if t.wt_kind!='plan' %} <span class="pill act">{{ {'detention':'Nachsitzen','challenge':'Herausforderung'}[t.wt_kind] }}</span>{% endif %}{% if t.routine_name %}<br><span class="small muted">{{ _('Wellenform') }}: {% if t.wt_routine %}<a href="{{ url_for('lb.routine_edit', rid=t.wt_routine) }}">{{ t.routine_name }}</a>{% else %}{{ t.routine_name }}{% endif %}</span>{% endif %}</td>
+      <td class="small">≤ {{ t.wt_max_punish }} {{ _('Strafen') }}</td>
+      <td class="plan-status {{ t.wt_status }}"><b>{{ _({'proposed':'vorgeschlagen','open':'offen','done':'bestanden','failed':'nicht bestanden'}[t.wt_status]) }}</b></td>
+      <td class="actions"><form method="post" action="{{ url_for('lb.slave_weekly', sid=row.slave_id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="wt_id" value="{{ t.wt_id }}"><input type="hidden" name="week" value="{{ week }}">
+        {% if t.wt_status=='proposed' %}<button name="op" value="confirm" class="sm">{{ _('bestätigen') }}</button>{% endif %}{% if t.wt_status in ('done','failed') %}<button name="op" value="reopen" class="sm">{{ _('öffnen') }}</button>{% endif %}<button name="op" value="delete" class="sm danger">×</button></form></td>
+    </tr>{% else %}<tr><td class="muted small" colspan="4">{{ _('kein Plan') }}</td></tr>{% endfor %}</tbody></table>
+    {% endfor %}
+    <form method="post" action="{{ url_for('lb.slave_weekly', sid=row.slave_id) }}" class="row" style="align-items:flex-end;margin-top:10px"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+      <div><label>{{ _('Aufgabe') }}</label><select name="action" id="wp_action">{% for a in TRAINABLE %}<option value="{{ a.code }}" data-unit="{{ tasktypes.get(a.code).target_unit }}" data-def="{{ tasktypes.get(a.code).plan_default }}" data-routine="{{ 1 if tasktypes.get(a.code).level_select else 0 }}">{{ a.name }}</option>{% endfor %}</select></div>
+      <div style="flex:0 0 90px"><label>{{ _('Ziel') }}</label><input type="number" name="target" id="wp_target" min="1" value="1800"></div>
+      <div style="flex:0 0 110px"><label>{{ _('Einheit') }}</label><select name="unit" id="wp_unit"><option value="s">{{ _('s / Anzahl') }}</option><option value="min">{{ _('Minuten') }}</option></select></div>
+      <div style="flex:0 0 90px"><label>{{ _('≤ Strafen') }}</label><input type="number" name="max_punish" min="0" max="50" value="{{ 2 }}"></div>
+      {% if routines_enabled %}<div style="flex:0 0 200px" id="wp_routine_box" hidden><label>{{ _('Wellenform') }}</label><select name="routine" id="wp_routine">
+        <option value="">{{ _('nach Stufe') }}</option>
+        {% for ro in routine_list() %}<option value="{{ ro.ro_id }}">{{ _('Stufe') }} {{ ro.ro_level }} · {{ ro.ro_name }}</option>{% endfor %}</select></div>{% endif %}
+      <div style="flex:0 0 130px"><label>{{ _('Woche') }}</label><select name="week"><option value="{{ cur_week }}">{{ _('aktuelle') }}</option><option value="{{ next_week }}">{{ _('nächste') }}</option></select></div>
+      <div style="flex:0 0 auto"><button class="primary">{{ _('Hinzufügen') }}</button></div></form>
+    <p class="small muted">{{ _('Ein Durchgang erfüllt eine Planaufgabe, wenn Ziel ≥ Planziel, Note bestanden und Bestrafungen ≤ erlaubt. Alle Plan-/Nachsitz-Aufgaben bestanden = Wochenbonus.') }}</p>
+  </div>
+  <div class="panel"><h2 style="margin-top:0">{{ _('Aufgabenstufen') }}</h2>
+    <table><thead><tr><th>{{ _('Aufgabe') }}</th><th>{{ _('Stufe') }}</th><th></th><th>{{ _('Grenzen') }}</th></tr></thead><tbody>
+    {% for a in lb.level_actions %}{% set lv = S.levels.get(a.code) %}<tr><td>{{ a.name }}</td><td><b>{{ lv.level if lv else 1 }}</b>{% if lv and lv.manual %} <span class="pill act" title="{{ _('von der Aufsicht gesetzt; Automatik pausiert bis zum nächsten Durchgang') }}">{{ _('manuell') }}</span>{% endif %}
+        {% if lv and (lv.min or lv.max) %}<br><span class="small muted" title="{{ _('die Automatik bewegt sich nur dazwischen') }}">{{ lv.min or 1 }}–{{ lv.max or '∞' }}</span>{% endif %}</td>
+      <td><form method="post" action="{{ url_for('lb.slave_level', sid=row.slave_id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ a.code }}"><input type="number" name="level" min="1" max="10" value="{{ lv.level if lv else 1 }}" style="width:64px"> <button class="sm">{{ _('setzen') }}</button></form></td>
+      {# bounds per slave and task (doc 44 §4): the automatic system moves only between them #}
+      <td><form method="post" action="{{ url_for('lb.slave_level_bounds', sid=row.slave_id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ a.code }}"><input type="number" name="min" min="1" max="10" value="{{ lv.min if lv and lv.min else '' }}" placeholder="1" style="width:52px">–<input type="number" name="max" min="1" max="10" value="{{ lv.max if lv and lv.max else '' }}" placeholder="∞" style="width:52px"> <button class="sm">{{ _('Grenzen') }}</button></form></td></tr>{% endfor %}
+    </tbody></table>
+    <p class="small muted">{{ _('Automatik: zwei A/B in Folge → Stufe +1 (Ziel schwerer, z. B. Dauer +10 %, Toleranz enger, Störreiz +1); zwei D–F in Folge → −1. Die Stufe fließt in die Punkte ein (Basis = Stufe × 10).') }} {{ _('Grenzen je Aufgabe halten die Automatik in einem Fenster — leer heißt: 1 bis level_max der Anlage.') }}</p>
+  </div>
+</div>
+</section>
+
+{# ------------------------------------------------------------------ #}
+<section class="tabpane" data-pane="verlauf">
+  <div class="panel"><h2 style="margin-top:0">{{ _('Letzte Durchgänge') }} <a class="btn sm" href="{{ url_for('lb.logbook_view', slave=row.slave_id) }}" style="float:right">{{ _('alle') }}</a></h2>
+    <table><tbody>{% for r in lb.runs %}<tr><td class="small muted" style="white-space:nowrap">{{ r.ach_started|ts }}</td><td>{{ r.ach_action|action_name }}</td><td class="small">{{ _('St.') }} {{ r.ach_level }} · {{ r.ach_target|target_text(r.ach_target_unit) }} · {{ r.ach_punish }} {{ _('Str.') }}</td>
+      <td class="gradecell">{% if r.ach_grade and r.ach_grade!='-' %}{{ r.ach_grade|grade_icon }}{{ r.ach_grade }}{% elif r.ach_grade=='-' %}{{ _('Bonus') }}{% else %}<span class="muted">{{ r.ach_status }}</span>{% endif %}</td><td><b>{{ r.ach_points }}</b>{% if r.ach_best %} ★{% endif %}</td></tr>
+    {% else %}<tr><td class="muted">{{ _('Noch keine Durchgänge.') }}</td></tr>{% endfor %}</tbody></table>
+    {% if lb.reviews %}<h3 style="font-size:14px;margin:14px 0 6px">{{ _('Zeugnisse') }}</h3><table><tbody>{% for r in lb.reviews %}<tr><td>{{ r.wr_week }}</td><td>{{ _('Rang') }} {{ r.wr_rank_before }} → <b>{{ r.wr_rank_after }}</b></td><td>{{ r.wr_score }} P{% if r.wr_place %} · {{ _('Platz') }} {{ r.wr_place }}{% endif %}</td><td class="small muted">{{ r.wr_reason }}</td><td><a class="btn sm" href="{{ url_for('lb.zeugnis', sid=row.slave_id, week=r.wr_week) }}">{{ _('Zeugnis') }}</a></td></tr>{% endfor %}</tbody></table>{% endif %}
+    {% if lb.challenges %}<h3 style="font-size:14px;margin:14px 0 6px">{{ _('Herausforderungen') }}</h3><table><tbody>{% for c in lb.challenges %}<tr>
+      <td>{{ c.ch_week }}</td><td>{{ c.ch_action|action_name }} {{ c.ch_target }}</td>
+      <td>{% if c.ce_place %}<b>{{ _('Platz') }} {{ c.ce_place }}</b> {{ _('von') }} {{ c.n_field }}{% else %}<span class="muted">{{ c.n_field }} {{ _('im Feld') }}</span>{% endif %}
+        {% if c.ce_note %} <span class="small muted">{{ c.ce_note }}</span>{% endif %}</td>
+      <td class="small">{% if c.ce_points is not none %}{{ c.ce_points }} P{% endif %}{% if c.ce_grade %} · {{ c.ce_grade }}{% endif %}{% if c.winner_name %} · {{ _('Sieger') }} {{ c.winner_name }}{% endif %}</td>
+      <td><span class="pill {{ 'on' if c.ch_status=='decided' else ('act' if c.ch_status=='open' else 'off') }}">{{ _({'open':'offen','decided':'entschieden','void':'ungültig'}.get(c.ch_status, c.ch_status)) }}</span></td></tr>{% endfor %}</tbody></table>{% endif %}
+  </div>
+</section>
+{% elif lb_enabled is defined and not lb_enabled %}<p class="muted small">{{ _('Logbuch aus: Migration 005 fehlt.') }}</p>{% endif %}
+
+{# ------------------------------------------------------------------ #}
+<section class="tabpane" data-pane="foto">
+<div class="panel" style="max-width:640px"><h2 style="margin-top:0">{{ _('Foto für die Anzeige') }}</h2>
+  <div class="row">
+    <div style="flex:0 0 160px">{% if photo %}<img src="{{ url_for('slave_photo', sid=row.slave_id) }}?v={{ now.timestamp()|int }}" alt="{{ _('Foto') }}" style="width:160px;height:200px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">{% else %}<div style="width:160px;height:200px;border-radius:8px;background:#23262d;display:flex;align-items:center;justify-content:center" class="muted small">{{ _('kein Foto') }}</div>{% endif %}</div>
+    <form method="post" action="{{ url_for('slave_photo_upload', sid=row.slave_id) }}" enctype="multipart/form-data"><input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>{{ _('JPEG oder PNG (max. 8 MB)') }}</label><input type="file" name="photo" accept="image/jpeg,image/png">
+      <p><button class="primary">{{ _('Hochladen') }}</button>{% if photo %} <button name="remove" value="1" class="danger" onclick="return confirm('Foto entfernen?')">{{ _('Entfernen') }}</button>{% endif %}</p>
+      <div class="small muted">{{ _('Das Original bleibt erhalten; gezeigt wird ein Ausschnitt im Verhältnis 4:5 — so wie Webseite und HDMI-Anzeige ihn ohnehin zeichnen.', id=row.slave_id) }}</div>
+    </form>
+  </div>
+
+  {% if orig %}
+  {# ---------------- Choose the section (2.3.4) ----------------
+     The frame is 4:5 because both displays draw 4:5. Moving and zooming
+     happen in the browser; what that becomes in pixels of the original is
+     computed by the script below, and the cutting is done by the central
+     unit. #}
+  <h3>{{ _('Ausschnitt wählen') }}</h3>
+  <div class="small muted" style="margin-bottom:8px">{{ _('Ziehen verschiebt, der Regler zoomt. Was im Rahmen steht, steht später auf der Anzeige.') }}</div>
+  <div class="row" style="align-items:flex-start;gap:16px">
+    <div id="cropframe" style="position:relative;width:320px;height:400px;overflow:hidden;border-radius:8px;border:1px solid var(--line);background:#111;cursor:grab;flex:0 0 auto">
+      <img id="cropimg" src="{{ url_for('slave_photo_orig', sid=row.slave_id) }}?v={{ now.timestamp()|int }}"
+           alt="{{ _('Original') }}" draggable="false"
+           style="position:absolute;transform-origin:0 0;user-select:none;-webkit-user-drag:none">
+    </div>
+    <div style="flex:1 1 200px">
+      <label for="cropzoom">{{ _('Zoom') }}</label>
+      <input id="cropzoom" type="range" min="100" max="400" value="100" style="width:100%">
+      <form method="post" action="{{ url_for('slave_photo_crop', sid=row.slave_id) }}" id="cropform">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <input type="hidden" name="x" id="cropx"><input type="hidden" name="y" id="cropy">
+        <input type="hidden" name="w" id="cropw">
+        <p><button class="primary">{{ _('Ausschnitt speichern') }}</button>
+           <button type="button" id="cropreset">{{ _('Mitte') }}</button></p>
+      </form>
+      <div class="small muted">{{ _('Original {w} × {h} Pixel', w=orig[0], h=orig[1]) }}</div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    // The original in REAL pixels, after the EXIF rotation — the central unit
+    // has already applied it, otherwise the frame would point at a different
+    // place than the cut-out.
+    var OW = {{ orig[0] }}, OH = {{ orig[1] }}, FW = 320, FH = 400;
+    var frame = document.getElementById('cropframe'), img = document.getElementById('cropimg');
+    var zoom = document.getElementById('cropzoom');
+    // s = displayed pixels per pixel of the original. It must never fall below
+    // minScale: a corner of the frame would then stand in nothing, and the
+    // central unit would have to rescue a section that does not exist.
+    var minScale = Math.max(FW / OW, FH / OH), s = minScale, ox = 0, oy = 0;
+    function clamp() {
+      s = Math.max(minScale, s);
+      ox = Math.min(0, Math.max(FW - OW * s, ox));
+      oy = Math.min(0, Math.max(FH - OH * s, oy));
+    }
+    function draw() {
+      clamp();
+      img.style.transform = 'translate(' + ox + 'px,' + oy + 'px) scale(' + s + ')';
+      img.style.width = OW + 'px'; img.style.height = OH + 'px';
+      document.getElementById('cropx').value = Math.round(-ox / s);
+      document.getElementById('cropy').value = Math.round(-oy / s);
+      document.getElementById('cropw').value = Math.round(FW / s);
+    }
+    function centre() { s = minScale; ox = (FW - OW * s) / 2; oy = (FH - OH * s) / 2; zoom.value = 100; draw(); }
+    zoom.addEventListener('input', function () {
+      // Zoom around the CENTRE of the frame, not the corner: otherwise the
+      // face wanders out of the picture while zooming.
+      var ns = minScale * (zoom.value / 100), cx = FW / 2, cy = FH / 2;
+      ox = cx - (cx - ox) * (ns / s); oy = cy - (cy - oy) * (ns / s); s = ns; draw();
+    });
+    document.getElementById('cropreset').addEventListener('click', centre);
+    var drag = null;
+    function down(e) { drag = {x: (e.touches ? e.touches[0] : e).clientX - ox,
+                              y: (e.touches ? e.touches[0] : e).clientY - oy};
+                       frame.style.cursor = 'grabbing'; }
+    function move(e) { if (!drag) return;
+                       var p = e.touches ? e.touches[0] : e;
+                       ox = p.clientX - drag.x; oy = p.clientY - drag.y; draw();
+                       if (e.cancelable) e.preventDefault(); }
+    function up() { drag = null; frame.style.cursor = 'grab'; }
+    frame.addEventListener('mousedown', down); window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    frame.addEventListener('touchstart', down, {passive: true});
+    frame.addEventListener('touchmove', move, {passive: false});
+    window.addEventListener('touchend', up);
+    if (img.complete) centre(); else img.addEventListener('load', centre);
+  })();
+  </script>
+  {% endif %}
+</div>
+</section>
+{% endblock %}
+{% block scripts %}<script>
+// Index cards. The card is held in the anchor of the address, so that the
+// return paths of the forms (redirect ... + '#kalibrierung') land again where
+// they were submitted from - and so that a bookmark can point at a card.
+//
+// The class 'js' is set by this script and no sooner. Without JavaScript the
+// rule '.js .tabpane{display:none}' therefore does not bite at all: then all
+// cards are visible, and the page is the long one from before again. Nothing
+// becomes unreachable.
+(function(){
+  var nav = document.getElementById('tabs');
+  if (!nav) return;
+  document.documentElement.classList.add('js');
+  var panes = [].slice.call(document.querySelectorAll('.tabpane'));
+  var links = [].slice.call(nav.querySelectorAll('a[data-tab]'));
+  var names = links.map(function(a){ return a.dataset.tab; });
+
+  function show(name){
+    if (names.indexOf(name) < 0) name = names[0];
+    panes.forEach(function(p){ p.classList.toggle('on', p.dataset.pane === name); });
+    links.forEach(function(a){ a.classList.toggle('on', a.dataset.tab === name); });
+  }
+  function fromHash(){ show((location.hash || '').replace(/^#/, '')); }
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+})();
+
+(function(){var a=document.getElementById('wp_action'),t=document.getElementById('wp_target'),u=document.getElementById('wp_unit'),
+ rb=document.getElementById('wp_routine_box');if(!a)return;
+function upd(){var o=a.options[a.selectedIndex];t.value=o.dataset.def;u.value='s';u.disabled=o.dataset.unit!=='s';
+ // waveform only for a routine task; the target there is the minimum grade
+ if(rb){rb.hidden=o.dataset.routine!=='1';}}
+a.addEventListener('change',upd);upd();})();
+</script>{% endblock %}
